@@ -1,0 +1,8 @@
+syntax = "proto3";
+package store.pb;
+option go_package = ".;pb";
+
+message Image{
+	string name = 1;
+	bytes data = 2;
+}

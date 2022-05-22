@@ -1,0 +1,17 @@
+syntax = "proto3";
+package store.pb;
+option go_package = ".;pb";
+
+message Document{
+	repeated TypedCid cids	 = 1;
+	string	title			 = 2;
+	bytes	time			 = 3;
+	repeated string types 	 = 4;
+	repeated string tags 	 = 5;
+	string 	dscrpt			 = 6;
+}
+
+message TypedCid{
+	string type = 1;
+	string cid 	= 2;
+}

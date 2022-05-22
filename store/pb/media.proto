@@ -1,0 +1,46 @@
+syntax = "proto3";
+package store.pb;
+option go_package = ".;pb";
+
+
+message Video{
+	repeated string chunkCids	= 1;
+	int64 duration 		  		= 2;
+	int64 frameRate				= 3;
+	int64 sampleRate			= 4;
+}
+
+message ChunkVideo{
+	repeated ImageRGBA 	 frames 	= 1;
+	repeated AudioSample samples	= 2;
+}
+
+message Audio{
+	repeated string chunkCids	= 1;
+	int64 duration 		  		= 2;
+	int64 sampleRate			= 3;
+}
+message ChunkAudio{
+	repeated AudioSample samples	= 1;
+}
+
+message ImageRGBA{
+	repeated uint32 pix	= 1;
+	int64 stride 		= 2;
+	Rectangle rect		= 3;
+}
+
+message Rectangle{
+	Point min 	= 1;
+	Point max	= 2;
+}
+
+message Point{
+	int64 x 	= 1;
+	int64 y 	= 2;
+}
+
+message AudioSample{
+	double left  = 1;
+	double right = 2;
+}

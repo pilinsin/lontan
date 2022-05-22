@@ -1,0 +1,7 @@
+syntax = "proto3";
+package store.pb;
+option go_package = ".;pb";
+
+message Pdf{
+	repeated bytes images = 1;
+}
