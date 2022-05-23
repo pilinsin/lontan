@@ -79,12 +79,9 @@ func (gui *GUI) NewSearchPage(w fyne.Window, title string, st store.IDocumentSto
 
 	orderSearch := container.NewHBox(orderBtn, searchBtn)
 	searchObj := container.NewBorder(nil,nil,modeSelector,orderSearch, searchEntry)
-	upObj := container.NewCenter(uploadBtn)
-	siz := upObj.Size()
-	siz.Width *= 2
-	upObj.Resize(siz)
+	upObj := container.NewBorder(nil,nil,uploadBtn,nil)
 
-	searchBar := container.NewBorder(nil,nil,upObj,nil, searchObj)
+	searchBar := container.NewBorder(upObj,nil,nil,nil, searchObj)
 	moreObj := container.NewCenter(moreBtn)
 	docsObj := container.NewMax(container.NewVScroll(docs))
 
@@ -100,7 +97,11 @@ func modeToQueryFunc(mode string) queryFunc{
 		case "key (pid/username/docname)":
 			fs := make([]query.Filter, len(strs))
 			for idx, str := range strs{
-				fs[idx] = crdt.KeyExistFilter{str}
+				if strings.Contains(str, "/"){
+					fs[idx] = crdt.KeyMatchFilter{str}
+				}else{
+					fs[idx] = crdt.KeyExistFilter{str}
+				}
 			}
 			return query.Query{Filters: fs}
 		case "title":

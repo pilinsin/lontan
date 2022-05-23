@@ -37,8 +37,10 @@ func loadImage(r io.Reader) (fyne.CanvasObject, error){
 	res := &fyne.StaticResource{name, data}
 	imgCanvas := canvas.NewImageFromResource(res)
 	imgCanvas.FillMode = canvas.ImageFillContain
+	imgCanvas.Resize(fyne.NewSize(400,400))
 	
 	return container.NewGridWrap(fyne.NewSize(400,400), imgCanvas), nil
+	//return container.NewGridWithColumns(1, imgCanvas), nil
 }
 func LoadImage(cid string, is ipfs.Ipfs) fyne.CanvasObject{
 	r, err := is.GetReader(cid)
@@ -90,9 +92,6 @@ func LoadPdf(cid string, is ipfs.Ipfs) fyne.CanvasObject{
 	}
 	if len(imgCanvases) == 0{return errorLabel("load pdf error")}
 
-	scroll := container.NewVScroll(container.NewVBox(imgCanvases...))
-	scroll.SetMinSize(imgCanvases[0].Size())
-	scroll.Resize(imgCanvases[0].Size())
-
-	return scroll
+	player := NewPdfPlayer(imgCanvases...)
+	return player.Render()
 }

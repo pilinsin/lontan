@@ -47,6 +47,8 @@ func NewDocumentStore(ctx context.Context, title, bAddr string) (IDocumentStore,
 	bootstraps := pv.AddrInfosFromString(bAddr)
 	baseDir := pv.RandString(8)
 	save := false
+	dirCloser := func(){}
+	if !save{dirCloser = func(){os.RemoveAll(baseDir)}}
 
 	ipfsDir := filepath.Join(baseDir, "ipfs")
 	is, err := ipfs.NewIpfsStore(i2p.NewI2pHost, ipfsDir, "ipfs_kw", save, false, bootstraps...)
@@ -65,7 +67,7 @@ func NewDocumentStore(ctx context.Context, title, bAddr string) (IDocumentStore,
 	autoSync(ctx, ss)
 
 	addr := title + "/" + bAddr + "/" + ss.Address()
-	return &documentStore{ctx, cancel, func(){}, "Anonymous", is, ss}, addr, nil
+	return &documentStore{ctx, cancel, dirCloser, "Anonymous", is, ss}, addr, nil
 }
 func LoadDocumentStore(ctx context.Context, addr string, uid *UserIdentity) (IDocumentStore, error){
 	ui, save := parseUserIdentity(uid)
@@ -138,7 +140,7 @@ func (ds *documentStore) Close(){
 	ds.is.Close()
 	ds.ss.Close()
 
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second)
 	ds.dirCloser()
 }
 
