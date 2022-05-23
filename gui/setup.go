@@ -2,6 +2,7 @@ package gui
 
 import(
 	"context"
+	"path/filepath"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
@@ -35,7 +36,7 @@ func (gui *GUI) NewSetupPage() fyne.CanvasObject {
 	uiLabel := gutil.NewCopyButton("user identity")
 	uiBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func(){
 		kp := crypto.NewSignKeyPair()
-		ui := store.NewUserIdentity(userNameEntry.Text, pv.RandString(8), kp.Verify(), kp.Sign())
+		ui := store.NewUserIdentity(userNameEntry.Text, kp.Verify(), kp.Sign())
 		uiLabel.SetText(ui.ToString())
 	})
 
@@ -83,12 +84,13 @@ func newStore(gui *GUI, te *widget.Entry, bLabel, stLabel *gutil.CopyButton, for
 
 		stLabel.SetText("processing...")
 		storesKey := "setup"
+		baseDir := filepath.Join("stores", storesKey)
 		if st, exist := gui.stores[storesKey]; exist{
 			st.Close()
 			st = nil
 		}
 
-		st, addr, err := store.NewDocumentStore(context.Background(), te.Text, bLabel.GetText())
+		st, addr, err := store.NewDocumentStore(context.Background(), te.Text, bLabel.GetText(), baseDir)
 		if err != nil{
 			stLabel.SetText("document store address")
 		}else{

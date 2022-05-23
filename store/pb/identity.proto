@@ -4,7 +4,6 @@ option go_package = ".;pb";
 
 message Identity{
 	string	name	= 1;
-	string	dir		= 2;
 	bytes	verf	= 3;
 	bytes	sign	= 4;
 }

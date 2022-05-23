@@ -11,15 +11,13 @@ import(
 
 type UserIdentity struct{
 	userName	string
-	baseDir		string
 	verfKey		crypto.IVerfKey
 	signKey		crypto.ISignKey
 }
-func NewUserIdentity(name, dir string, verf crypto.IVerfKey, sign crypto.ISignKey) *UserIdentity{
-	return &UserIdentity{name, dir, verf, sign}
+func NewUserIdentity(name string, verf crypto.IVerfKey, sign crypto.ISignKey) *UserIdentity{
+	return &UserIdentity{name, verf, sign}
 }
 func (ui UserIdentity) UserName() string{return ui.userName}
-func (ui UserIdentity) StoreDir() string{return ui.baseDir}
 func (ui UserIdentity) Verify() crypto.IVerfKey{return ui.verfKey}
 func (ui UserIdentity) Sign() crypto.ISignKey{return ui.signKey}
 
@@ -28,7 +26,6 @@ func (ui *UserIdentity) Marshal() []byte{
 	ms, _ := crypto.MarshalSignKey(ui.signKey)
 	mui := &pb.Identity{
 		Name: ui.userName,
-		Dir:  ui.baseDir,
 		Verf: mv,
 		Sign: ms,
 	}
@@ -51,7 +48,6 @@ func (ui *UserIdentity) Unmarshal(m []byte) error {
 	}
 
 	ui.userName = mui.GetName()
-	ui.baseDir = mui.GetDir()
 	ui.verfKey = verfKey
 	ui.signKey = signKey
 	return nil

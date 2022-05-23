@@ -27,7 +27,7 @@ var order = []string{
 }
 
 
-func (gui *GUI) NewSearchPage(w fyne.Window, title string, st store.IDocumentStore, ui *store.UserIdentity) (string, fyne.CanvasObject){
+func (gui *GUI) NewSearchPage(w fyne.Window, title string, st store.IDocumentStore) fyne.CanvasObject{
 	uploadBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func(){
 		gui.addPageToTabs(title+"_upload", NewUploadPage(w, st))
 	})
@@ -85,7 +85,7 @@ func (gui *GUI) NewSearchPage(w fyne.Window, title string, st store.IDocumentSto
 	moreObj := container.NewCenter(moreBtn)
 	docsObj := container.NewMax(container.NewVScroll(docs))
 
-	return title, container.NewBorder(searchBar,moreObj,nil,nil, docsObj)
+	return container.NewBorder(searchBar,moreObj,nil,nil, docsObj)
 }
 
 
@@ -147,7 +147,7 @@ func newDocumentCard(ndoc *store.NamedDocument) fyne.CanvasObject{
 	nDesc := 200
 	desc := &widget.Label{
 		Text: extractDescription(ndoc.Description, nDesc),
-		Wrapping: fyne.TextWrapWord,
+		Wrapping: fyne.TextTruncate,
 	}
 	desc.ExtendBaseWidget(desc)
 

@@ -92,6 +92,8 @@ func uplpadDialog(w fyne.Window, lable iText, is ipfs.Ipfs, ext string, ch chan 
 func NewUploadPage(w fyne.Window, st store.IDocumentStore) fyne.CanvasObject{
 	noteLabel := widget.NewLabel("upload file")
 
+	ui := widget.NewEntry()
+	ui.SetPlaceHolder("user identity")
 	name := widget.NewEntry()
 	name.SetPlaceHolder("document name: <pid/username/docname>")
 	title := widget.NewEntry()
@@ -128,6 +130,10 @@ func NewUploadPage(w fyne.Window, st store.IDocumentStore) fyne.CanvasObject{
 			return
 		}
 
+		uid := &store.UserIdentity{}
+		if err := uid.FromString(ui.Text); err != nil{uid = nil}
+		st.SetUserIdentity(uid)
+
 		docInfo := store.NewDocumentInfo(title.Text, description.Text, sliceToMap(docTypes), sliceToMap(tags.Texts()), time.Now().UTC())
 		if err := st.Put(name.Text, docInfo, tds...); err != nil{
 			noteLabel.SetText(fmt.Sprintln("upload error", err))
@@ -137,7 +143,7 @@ func NewUploadPage(w fyne.Window, st store.IDocumentStore) fyne.CanvasObject{
 	})
 
 	upBtnLabel := container.NewBorder(nil,nil,uploadBtn,nil, noteLabel)
-	page := container.NewVBox(name, title, description, tags.Render(), btns, dataObjs, upBtnLabel)
+	page := container.NewVBox(ui, name, title, description, tags.Render(), btns, dataObjs, upBtnLabel)
 	return container.NewMax(container.NewVScroll(page))
 }
 

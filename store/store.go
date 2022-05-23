@@ -30,9 +30,10 @@ func (td *TypedData) Data() io.Reader{return td.data}
 type IDocumentStore interface{
 	Close()
 	Ipfs() ipfs.Ipfs
+	SetUserIdentity(*UserIdentity)
 	Put(string, *DocumentInfo, ...*TypedData) error
 	Get(string) (*NamedDocument, error)
-	Query(qs ...query.Query) (<-chan *NamedDocument, error)//time, tag, etc...
+	Query(...query.Query) (<-chan *NamedDocument, error)//time, tag, etc...
 }
 
 type documentStore struct{
@@ -41,14 +42,12 @@ type documentStore struct{
 	dirCloser func()
 	userName 	string
 	is 			ipfs.Ipfs
-	ss 			crdt.IStore
+	ss 			crdt.ISignatureStore
 }
-func NewDocumentStore(ctx context.Context, title, bAddr string) (IDocumentStore, string, error){
+func NewDocumentStore(ctx context.Context, title, bAddr, baseDir string) (IDocumentStore, string, error){
 	bootstraps := pv.AddrInfosFromString(bAddr)
-	baseDir := pv.RandString(8)
 	save := false
-	dirCloser := func(){}
-	if !save{dirCloser = func(){os.RemoveAll(baseDir)}}
+	dirCloser := func(){os.Remove(baseDir)}
 
 	ipfsDir := filepath.Join(baseDir, "ipfs")
 	is, err := ipfs.NewIpfsStore(i2p.NewI2pHost, ipfsDir, "ipfs_kw", save, false, bootstraps...)
@@ -58,43 +57,44 @@ func NewDocumentStore(ctx context.Context, title, bAddr string) (IDocumentStore,
 
 	storeDir := filepath.Join(baseDir, "store")
 	v := crdt.NewVerse(i2p.NewI2pHost, storeDir, save, false, bootstraps...)
-	ss, err := v.NewStore(pv.RandString(8), "signature")
+	st, err := v.NewStore(pv.RandString(8), "signature")
 	if err != nil {
 		is.Close()
 		return nil, "", err
 	}
+	ss := st.(crdt.ISignatureStore)
 	ctx, cancel := context.WithCancel(context.Background())
 	autoSync(ctx, ss)
 
 	addr := title + "/" + bAddr + "/" + ss.Address()
 	return &documentStore{ctx, cancel, dirCloser, "Anonymous", is, ss}, addr, nil
 }
-func LoadDocumentStore(ctx context.Context, addr string, uid *UserIdentity) (IDocumentStore, error){
-	ui, save := parseUserIdentity(uid)
-	dirCloser := func(){}
-	if !save{dirCloser = func(){os.RemoveAll(ui.baseDir)}}
+func LoadDocumentStore(ctx context.Context, addr, baseDir string) (IDocumentStore, error){
+	ui := parseUserIdentity(nil)
 	bAddr, sAddr, err := parseAddr(addr)
 	if err != nil{return nil, err}
 	bootstraps := pv.AddrInfosFromString(bAddr)
+	save := true
 
-	ipfsDir := filepath.Join(ui.baseDir, "ipfs")
+	ipfsDir := filepath.Join(baseDir, "ipfs")
 	is, err := ipfs.NewIpfsStore(i2p.NewI2pHost, ipfsDir, "ipfs_kw", save, false, bootstraps...)
 	if err != nil {
 		return nil, err
 	}
 
-	storeDir := filepath.Join(ui.baseDir, "store")	
+	storeDir := filepath.Join(baseDir, "store")	
 	v := crdt.NewVerse(i2p.NewI2pHost, storeDir, save, false, bootstraps...)
 	opt := &crdt.StoreOpts{Pub: ui.verfKey, Priv: ui.signKey}
-	ss, err := v.LoadStore(ctx, sAddr, "signature", opt)
+	st, err := v.LoadStore(ctx, sAddr, "signature", opt)
 	if err != nil {
 		is.Close()
 		return nil, err
 	}
+	ss := st.(crdt.ISignatureStore)
 	ctx, cancel := context.WithCancel(context.Background())
 	autoSync(ctx, ss)
 
-	return &documentStore{ctx, cancel, dirCloser, ui.userName, is, ss}, nil
+	return &documentStore{ctx, cancel, func(){}, ui.userName, is, ss}, nil
 }
 
 func parseAddr(addr string) (string, string, error){
@@ -105,20 +105,19 @@ func parseAddr(addr string) (string, string, error){
 	return addrs[0], addrs[1], nil
 }
 
-func parseUserIdentity(ui *UserIdentity) (*UserIdentity, bool){
+func parseUserIdentity(ui *UserIdentity) *UserIdentity{
 	if ui == nil{
-		return &UserIdentity{"Anonymous", pv.RandString(8), nil, nil}, false
+		return &UserIdentity{"Anonymous", nil, nil}
 	}else{
 		invalidName := ui.userName == ""
-		invalidDir := ui.baseDir == ""
 		invalidVerf := ui.verfKey == nil
 		invalidSign := ui.signKey == nil
-		if invalidName || invalidDir || invalidVerf || invalidSign{
-			return &UserIdentity{"Anonymous", pv.RandString(8), nil, nil}, false
+		if invalidName || invalidVerf || invalidSign{
+			return &UserIdentity{"Anonymous", nil, nil}
 		}
 	}
 
-	return ui, true
+	return ui
 }
 
 func autoSync(ctx context.Context, ss crdt.IStore) {
@@ -145,6 +144,12 @@ func (ds *documentStore) Close(){
 }
 
 func (ds *documentStore) Ipfs() ipfs.Ipfs{return ds.is}
+
+func (ds *documentStore) SetUserIdentity(ui *UserIdentity){
+	ui = parseUserIdentity(ui)
+	ds.userName = ui.userName
+	ds.ss.ResetKeyPair(ui.signKey, ui.verfKey)
+}
 
 func (ds *documentStore) Put(docName string, docInfo *DocumentInfo, data ...*TypedData) error{
 	cids := make([]typedCid,0)

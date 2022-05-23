@@ -178,7 +178,7 @@ require (
 	github.com/pdfcpu/pdfcpu v0.3.13 // indirect
 	github.com/pilinsin/go-libp2p-i2p v0.0.0-20220522061631-2f0bb90231a6 // indirect
 	github.com/pilinsin/go-libp2p-i2p-transport v0.0.0-20220420124841-af137f670078 // indirect
-	github.com/pilinsin/p2p-verse v0.0.0-20220510030921-889dec2fec8c // indirect
+	github.com/pilinsin/p2p-verse v0.0.0-20220523203931-e5c357418339 // indirect
 	github.com/pilinsin/util v0.0.0-20220421092850-f71b35585dd1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -218,6 +218,5 @@ require (
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )

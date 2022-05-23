@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"encoding/base64"
 	"golang.org/x/crypto/argon2"
@@ -64,7 +65,7 @@ func (gui *GUI) addPageToTabs(title string, page fyne.CanvasObject){
 	gui.page.Refresh()
 }
 
-func (gui *GUI) loadSearchPage(addr, uiStr string) (string, fyne.CanvasObject){
+func (gui *GUI) loadSearchPage(addr string) (string, fyne.CanvasObject){
 	addrs := strings.Split(strings.TrimPrefix(addr, "/"), "/")
 	if len(addrs) != 3{
 		return "", nil
@@ -72,31 +73,26 @@ func (gui *GUI) loadSearchPage(addr, uiStr string) (string, fyne.CanvasObject){
 	title := addrs[0]
 	stAddr := strings.Join(addrs[1:], "/")
 
-	ui := &store.UserIdentity{}
-	if err := ui.FromString(uiStr); err != nil{ui = nil}
-
 	storesKey := storeHash(title, addrs[2])
 	st, ok := gui.stores[storesKey]
 	if !ok{
+		baseDir := filepath.Join("stores", storesKey)
 		var err error
-		st, err = store.LoadDocumentStore(context.Background(), stAddr, ui)
+		st, err = store.LoadDocumentStore(context.Background(), stAddr, baseDir)
 		if err != nil{return "", nil}
 		gui.stores[storesKey] = st
 	}
 
-	return gui.NewSearchPage(gui.w, title, st, ui)
+	return title, gui.NewSearchPage(gui.w, title, st)
 }
 
 func (gui *GUI) loadPageForm() fyne.CanvasObject {
 	addrEntry := widget.NewEntry()
 	addrEntry.PlaceHolder = "Store Address"
-	uiEntry := widget.NewEntry()
-	uiEntry.PlaceHolder = "User Identity Address"
 
 	onTapped := func() {
-		title, loadPage := gui.loadSearchPage(addrEntry.Text, uiEntry.Text)
+		title, loadPage := gui.loadSearchPage(addrEntry.Text)
 		addrEntry.SetText("")
-		uiEntry.SetText("")
 		if loadPage == nil {
 			return
 		}
@@ -105,8 +101,7 @@ func (gui *GUI) loadPageForm() fyne.CanvasObject {
 	}
 	loadBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), onTapped)
 
-	entries := container.NewVBox(addrEntry, uiEntry)
-	return container.NewBorder(nil, nil, nil, loadBtn, entries)
+	return container.NewBorder(nil, nil, nil, loadBtn, addrEntry)
 }
 func (gui *GUI) defaultPage(note *widget.Label) *container.TabItem {
 	newForm := gui.loadPageForm()
