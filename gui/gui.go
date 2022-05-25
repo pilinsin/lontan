@@ -2,10 +2,10 @@ package gui
 
 import (
 	"context"
-	"path/filepath"
-	"strings"
 	"encoding/base64"
 	"golang.org/x/crypto/argon2"
+	"path/filepath"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -14,27 +14,27 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	i2p "github.com/pilinsin/go-libp2p-i2p"
-	pv "github.com/pilinsin/p2p-verse"
 	store "github.com/pilinsin/lontan/store"
+	pv "github.com/pilinsin/p2p-verse"
 )
 
 func pageToTabItem(title string, page fyne.CanvasObject) *container.TabItem {
 	return container.NewTabItem(title, page)
 }
 
-func storeHash(title, stAddr string) string{
+func storeHash(title, stAddr string) string {
 	b := argon2.IDKey([]byte(stAddr), []byte(title), 1, 64*1024, 4, 64)
 	return base64.URLEncoding.EncodeToString(b)
 }
 
 type GUI struct {
-	rt *i2p.I2pRouter
+	rt     *i2p.I2pRouter
 	stores map[string]store.IDocumentStore
-	bs map[string]pv.IBootstrap
-	w    fyne.Window
-	size fyne.Size
-	tabs *container.AppTabs
-	page *fyne.Container
+	bs     map[string]pv.IBootstrap
+	w      fyne.Window
+	size   fyne.Size
+	tabs   *container.AppTabs
+	page   *fyne.Container
 }
 
 func New(title string, width, height float32) *GUI {
@@ -57,7 +57,7 @@ func (gui *GUI) withRemove(page fyne.CanvasObject) fyne.CanvasObject {
 	})
 	return container.NewBorder(container.NewBorder(nil, nil, nil, rmvBtn), nil, nil, nil, page)
 }
-func (gui *GUI) addPageToTabs(title string, page fyne.CanvasObject){
+func (gui *GUI) addPageToTabs(title string, page fyne.CanvasObject) {
 	withRmvPage := gui.withRemove(page)
 	withRmvTab := pageToTabItem(title, withRmvPage)
 	gui.tabs.Append(withRmvTab)
@@ -65,21 +65,22 @@ func (gui *GUI) addPageToTabs(title string, page fyne.CanvasObject){
 	gui.page.Refresh()
 }
 
-func (gui *GUI) loadSearchPage(addr string) (string, fyne.CanvasObject){
+func (gui *GUI) loadSearchPage(addr string) (string, fyne.CanvasObject) {
 	addrs := strings.Split(strings.TrimPrefix(addr, "/"), "/")
-	if len(addrs) != 3{
+	if len(addrs) != 3 {
 		return "", nil
 	}
-	title := addrs[0]
-	stAddr := strings.Join(addrs[1:], "/")
+	title := addrs[1]
 
 	storesKey := storeHash(title, addrs[2])
 	st, ok := gui.stores[storesKey]
-	if !ok{
+	if !ok {
 		baseDir := filepath.Join("stores", storesKey)
 		var err error
-		st, err = store.LoadDocumentStore(context.Background(), stAddr, baseDir)
-		if err != nil{return "", nil}
+		st, err = store.LoadDocumentStore(context.Background(), addr, baseDir)
+		if err != nil {
+			return "", nil
+		}
 		gui.stores[storesKey] = st
 	}
 
@@ -106,7 +107,7 @@ func (gui *GUI) loadPageForm() fyne.CanvasObject {
 func (gui *GUI) defaultPage(note *widget.Label) *container.TabItem {
 	newForm := gui.loadPageForm()
 	setup := gui.NewSetupPage()
-	return pageToTabItem("top page", container.NewBorder(newForm,note,nil,nil, setup))
+	return pageToTabItem("top page", container.NewBorder(newForm, note, nil, nil, setup))
 }
 
 func (gui *GUI) initErrorPage() {
@@ -127,12 +128,12 @@ func (gui *GUI) i2pStart(i2pNote *widget.Label) {
 	}()
 }
 
-func (gui *GUI) Close(){
-	for _, st := range gui.stores{
+func (gui *GUI) Close() {
+	for _, st := range gui.stores {
 		st.Close()
 		st = nil
 	}
-	for _, b := range gui.bs{
+	for _, b := range gui.bs {
 		b.Close()
 		b = nil
 	}

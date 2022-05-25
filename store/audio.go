@@ -1,6 +1,6 @@
 package store
 
-import(
+import (
 	//"errors"
 	"io"
 	//"os"
@@ -9,44 +9,46 @@ import(
 	//proto "google.golang.org/protobuf/proto"
 	//reisen "github.com/zergon321/reisen"
 
-	ipfs "github.com/pilinsin/p2p-verse/ipfs"
 	pb "github.com/pilinsin/lontan/store/pb"
+	ipfs "github.com/pilinsin/p2p-verse/ipfs"
 )
+
 //protoc --go_out=. *.proto
 
-
-type audio struct{
-	chunkCids []string
-	duration time.Duration
+type audio struct {
+	chunkCids  []string
+	duration   time.Duration
 	sampleRate int
 }
-func (a audio) ChunkCids() []string{return a.chunkCids}
-func (a audio) Duration() time.Duration{return a.duration}
-func (a audio) SampleRate() int{return a.sampleRate}
 
-func encodeAudio(cids []string, duration time.Duration, sr int) *pb.Audio{
+func (a audio) ChunkCids() []string     { return a.chunkCids }
+func (a audio) Duration() time.Duration { return a.duration }
+func (a audio) SampleRate() int         { return a.sampleRate }
+
+func encodeAudio(cids []string, duration time.Duration, sr int) *pb.Audio {
 	return &pb.Audio{
-		ChunkCids: cids,
-		Duration: int64(duration),
+		ChunkCids:  cids,
+		Duration:   int64(duration),
 		SampleRate: int64(sr),
 	}
 }
-func DecodeAudio(pbm *pb.Audio) *audio{
+func DecodeAudio(pbm *pb.Audio) *audio {
 	return &audio{
-		chunkCids: pbm.GetChunkCids(),
-		duration: time.Duration(pbm.GetDuration()),
+		chunkCids:  pbm.GetChunkCids(),
+		duration:   time.Duration(pbm.GetDuration()),
 		sampleRate: int(pbm.GetSampleRate()),
 	}
 }
 
-type chunkAudio struct{
+type chunkAudio struct {
 	samples [][2]float64
 }
-func (c chunkAudio) Samples() [][2]float64{return c.samples}
 
-func encodeChunkAudio(samples [][2]float64) *pb.ChunkAudio{
+func (c chunkAudio) Samples() [][2]float64 { return c.samples }
+
+func encodeChunkAudio(samples [][2]float64) *pb.ChunkAudio {
 	pbss := make([]*pb.AudioSample, len(samples))
-	for idx, sample := range samples{
+	for idx, sample := range samples {
 		pbss[idx] = encodeAudioSample(sample)
 	}
 
@@ -54,16 +56,15 @@ func encodeChunkAudio(samples [][2]float64) *pb.ChunkAudio{
 		Samples: pbss,
 	}
 }
-func DecodeChunkAudio(pbc *pb.ChunkAudio) *chunkAudio{
+func DecodeChunkAudio(pbc *pb.ChunkAudio) *chunkAudio {
 	pbss := pbc.GetSamples()
 	samples := make([][2]float64, len(pbss))
-	for idx, pbs := range pbss{
+	for idx, pbs := range pbss {
 		samples[idx] = decodeAudioSample(pbs)
 	}
 
 	return &chunkAudio{samples}
 }
-
 
 /*
 func readAudioOnly(media *reisen.Media) (<-chan [2]float64, chan error, error){
@@ -112,66 +113,66 @@ func readAudioOnly(media *reisen.Media) (<-chan [2]float64, chan error, error){
 }
 */
 
-func encodeAudioFile(fname string, is ipfs.Ipfs) ([]byte, error){
+func encodeAudioFile(fname string, is ipfs.Ipfs) ([]byte, error) {
 	return nil, nil
-/*
-	media, err := reisen.NewMedia(fname)
-	if err != nil{return nil, err}
-	defer media.Close()
+	/*
+		media, err := reisen.NewMedia(fname)
+		if err != nil{return nil, err}
+		defer media.Close()
 
-	dur, err := media.Duration()
-	if err != nil{return nil, err}
-	ast := media.AudioStreams()
-	if len(ast) == 0{return nil, errors.New("no stream")}
-	sr := ast[0].SampleRate()
-	if sr == 0{
-		sr = 44100
-	}
-
-	sampleBuffer, errs, err := readAudioOnly(media)
-	if err != nil{return nil, err}
-
-
-	chunkCids := make([]string, 0)
-	chunkSampleSize := sr*10
-	for{
-		if err := isErrs(errs); err != nil{return nil, err}
-
-		samples := make([][2]float64, 0)
-		for sample := range sampleBuffer{
-			samples = append(samples, sample)
-			if len(samples) >= chunkSampleSize{
-				break
-			}
+		dur, err := media.Duration()
+		if err != nil{return nil, err}
+		ast := media.AudioStreams()
+		if len(ast) == 0{return nil, errors.New("no stream")}
+		sr := ast[0].SampleRate()
+		if sr == 0{
+			sr = 44100
 		}
 
-		mch, err := proto.Marshal(encodeChunkAudio(samples))
+		sampleBuffer, errs, err := readAudioOnly(media)
 		if err != nil{return nil, err}
-		cid, err := is.Add(mch)
+
+
+		chunkCids := make([]string, 0)
+		chunkSampleSize := sr*10
+		for{
+			if err := isErrs(errs); err != nil{return nil, err}
+
+			samples := make([][2]float64, 0)
+			for sample := range sampleBuffer{
+				samples = append(samples, sample)
+				if len(samples) >= chunkSampleSize{
+					break
+				}
+			}
+
+			mch, err := proto.Marshal(encodeChunkAudio(samples))
+			if err != nil{return nil, err}
+			cid, err := is.Add(mch)
+			if err != nil{return nil, err}
+			chunkCids = append(chunkCids, cid)
+		}
+
+		ma, err := proto.Marshal(encodeAudio(chunkCids, dur, sr))
 		if err != nil{return nil, err}
-		chunkCids = append(chunkCids, cid)
-	}
 
-	ma, err := proto.Marshal(encodeAudio(chunkCids, dur, sr))
-	if err != nil{return nil, err}
-
-	return ma, nil
-*/
+		return ma, nil
+	*/
 }
-func EncodeAudio(r io.Reader, is ipfs.Ipfs) (io.Reader, error){
+func EncodeAudio(r io.Reader, is ipfs.Ipfs) (io.Reader, error) {
 	return nil, nil
-/*
-	tmpDir := "media_cache"
-	tmpFile, err := os.CreateTemp(tmpDir, "*****")
-	if err != nil{return nil, err}
-	if _, err := tmpFile.ReadFrom(r); err != nil{return nil, err}
-	fname := tmpFile.Name()
-	tmpFile.Close()
+	/*
+		tmpDir := "media_cache"
+		tmpFile, err := os.CreateTemp(tmpDir, "*****")
+		if err != nil{return nil, err}
+		if _, err := tmpFile.ReadFrom(r); err != nil{return nil, err}
+		fname := tmpFile.Name()
+		tmpFile.Close()
 
-	m, err := encodeAudioFile(fname, is)
-	if err != nil{return nil, err}
+		m, err := encodeAudioFile(fname, is)
+		if err != nil{return nil, err}
 
-	os.RemoveAll(tmpDir)
-	return bytes.NewReader(m), nil
-*/
+		os.RemoveAll(tmpDir)
+		return bytes.NewReader(m), nil
+	*/
 }

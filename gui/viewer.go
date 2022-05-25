@@ -1,17 +1,17 @@
 package gui
 
-import(
+import (
 	"strings"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/widget"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 
-	ipfs "github.com/pilinsin/p2p-verse/ipfs"
 	store "github.com/pilinsin/lontan/store"
+	ipfs "github.com/pilinsin/p2p-verse/ipfs"
 )
 
-func loadMedia(tp, cid string, is ipfs.Ipfs) fyne.CanvasObject{
+func loadMedia(tp, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	switch tp {
 	case "text":
 		return LoadText(cid, is)
@@ -28,39 +28,38 @@ func loadMedia(tp, cid string, is ipfs.Ipfs) fyne.CanvasObject{
 	}
 }
 
-func docTypesToIcons(docTypes []string) fyne.CanvasObject{
+func docTypesToIcons(docTypes []string) fyne.CanvasObject {
 	icons := make([]fyne.CanvasObject, len(docTypes))
-	for idx, ext := range docTypes{
+	for idx, ext := range docTypes {
 		icons[idx] = widget.NewButtonWithIcon("", extToIcon(ext), nil)
 	}
 	return container.NewHBox(icons...)
 }
 
-
-func tagsLabel(tags []string) fyne.CanvasObject{
+func tagsLabel(tags []string) fyne.CanvasObject {
 	lbl := &widget.Label{
-		Text: strings.Join(tags, ", "),
+		Text:     strings.Join(tags, ", "),
 		Wrapping: fyne.TextWrapWord,
 	}
 	lbl.ExtendBaseWidget(lbl)
 	return lbl
 }
-func descriptionLabel(text string) fyne.CanvasObject{
+func descriptionLabel(text string) fyne.CanvasObject {
 	lbl := &widget.Label{
-		Text: text,
+		Text:     text,
 		Wrapping: fyne.TextWrapWord,
 	}
 	lbl.ExtendBaseWidget(lbl)
 	return lbl
 }
 
-func NewViewerPage(nmDoc *store.NamedDocument, st store.IDocumentStore) fyne.CanvasObject{
-	if nmDoc == nil{
+func NewViewerPage(nmDoc *store.NamedDocument, st store.IDocumentStore) fyne.CanvasObject {
+	if nmDoc == nil {
 		return container.NewCenter(widget.NewLabel("no document"))
 	}
-	
+
 	medias := make([]fyne.CanvasObject, len(nmDoc.Cids))
-	for idx, cid := range nmDoc.Cids{
+	for idx, cid := range nmDoc.Cids {
 		medias[idx] = loadMedia(cid.Type, cid.Cid, st.Ipfs())
 	}
 

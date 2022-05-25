@@ -1,6 +1,6 @@
 package gui
 
-import(
+import (
 	"context"
 	"time"
 
@@ -12,81 +12,98 @@ import(
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	proto "google.golang.org/protobuf/proto"
+	store "github.com/pilinsin/lontan/store"
 	pb "github.com/pilinsin/lontan/store/pb"
 	ipfs "github.com/pilinsin/p2p-verse/ipfs"
-	store "github.com/pilinsin/lontan/store"
+	proto "google.golang.org/protobuf/proto"
 )
 
-const(
-	channelCount = 2
-	bitDepth = 8
-	sampleBufferSize = 32*channelCount*bitDepth*1024
+const (
+	channelCount     = 2
+	bitDepth         = 8
+	sampleBufferSize = 32 * channelCount * bitDepth * 1024
 )
 
-type audioPlayer struct{	
-	is ipfs.Ipfs
-	chunkCids []string
-	duration time.Duration
+type audioPlayer struct {
+	is         ipfs.Ipfs
+	chunkCids  []string
+	duration   time.Duration
 	sampleRate int
 
-	ctx context.Context
+	ctx    context.Context
 	cancel func()
 
-	chunk *audioChunk
-	nextChunk *audioChunk
+	chunk      *audioChunk
+	nextChunk  *audioChunk
 	chunkIndex int
-	
+
 	timeBar *widget.Slider
 
 	playing bool
-	paused bool
+	paused  bool
 }
-func NewAudioPlayer(cid string, is ipfs.Ipfs) (*audioPlayer, error){
+
+func NewAudioPlayer(cid string, is ipfs.Ipfs) (*audioPlayer, error) {
 	m, err := is.Get(cid)
-	if err != nil{return nil, err}
+	if err != nil {
+		return nil, err
+	}
 	pbAudio := &pb.Audio{}
-	if err := proto.Unmarshal(m, pbAudio); err != nil{return nil, err}
-	
+	if err := proto.Unmarshal(m, pbAudio); err != nil {
+		return nil, err
+	}
+
 	a := store.DecodeAudio(pbAudio)
 	ap := &audioPlayer{
-		is: is,
-		chunkCids: a.ChunkCids(),
-		duration: a.Duration(),
+		is:         is,
+		chunkCids:  a.ChunkCids(),
+		duration:   a.Duration(),
 		sampleRate: a.SampleRate(),
 	}
-	if err := ap.init(); err != nil{return nil, err}
+	if err := ap.init(); err != nil {
+		return nil, err
+	}
 
 	return ap, nil
 }
 
-func (ap *audioPlayer) speakerInit() error{
+func (ap *audioPlayer) speakerInit() error {
 	ssr := beep.SampleRate(ap.sampleRate)
 	return speaker.Init(ssr, ssr.N(time.Millisecond*100))
 }
-func (ap *audioPlayer) init() error{
-	if err := ap.speakerInit(); err != nil{return err}
+func (ap *audioPlayer) init() error {
+	if err := ap.speakerInit(); err != nil {
+		return err
+	}
 
 	ap.ctx, ap.cancel = context.WithCancel(context.Background())
 	ch, err := ap.loadChunk(0)
-	if err != nil{return err}
+	if err != nil {
+		return err
+	}
 	ch2, err := ap.loadChunk(1)
 	ap.chunk = ch
 	ap.nextChunk = ch2
-	if err != nil{return err}
+	if err != nil {
+		return err
+	}
 
 	ap.timeBar = &widget.Slider{
-		Max: ap.duration.Seconds(),
-		Step: time.Second.Seconds()*10,
+		Max:  ap.duration.Seconds(),
+		Step: time.Second.Seconds() * 10,
 	}
-	onChanged := func(val float64){
+	onChanged := func(val float64) {
 		ratio := val / ap.timeBar.Max
 		idx := int(ratio * float64(len(ap.chunkCids)))
-		if idx != ap.chunkIndex{
+		if idx != ap.chunkIndex {
 			ap.Clear()
-			if err := ap.speakerInit(); err != nil{return}
+			if err := ap.speakerInit(); err != nil {
+				return
+			}
 			ap.ctx, ap.cancel = context.WithCancel(context.Background())
-			if err := ap.LoadChunk(idx); err != nil{return}
+			if err := ap.LoadChunk(idx); err != nil {
+				return
+			}
 			ap.Play()
 		}
 	}
@@ -96,41 +113,49 @@ func (ap *audioPlayer) init() error{
 	ap.paused = true
 	return nil
 }
-func (ap *audioPlayer) Clear(){
+func (ap *audioPlayer) Clear() {
 	//stop player for re-init
 	ap.paused = true
 	ap.playing = false
-	if ap.cancel != nil{ap.cancel()}
+	if ap.cancel != nil {
+		ap.cancel()
+	}
 }
-func (ap *audioPlayer) Close(){
+func (ap *audioPlayer) Close() {
 	ap.paused = true
 	ap.playing = false
-	if ap.cancel != nil{ap.cancel()}
+	if ap.cancel != nil {
+		ap.cancel()
+	}
 	speaker.Clear()
 	speaker.Close()
 	ap.is = nil
 }
 
-
-type audioChunk struct{
+type audioChunk struct {
 	sampleBuffer <-chan [2]float64
 }
-func (ap *audioPlayer) loadChunk(idx int) (*audioChunk, error){
-	if idx >= len(ap.chunkCids){
+
+func (ap *audioPlayer) loadChunk(idx int) (*audioChunk, error) {
+	if idx >= len(ap.chunkCids) {
 		return nil, nil
 	}
 
 	mpbc, err := ap.is.Get(ap.chunkCids[idx])
-	if err != nil{return nil, err}
+	if err != nil {
+		return nil, err
+	}
 	pbc := &pb.ChunkAudio{}
-	if err := proto.Unmarshal(mpbc, pbc); err != nil{return nil, err}
+	if err := proto.Unmarshal(mpbc, pbc); err != nil {
+		return nil, err
+	}
 	chunk := store.DecodeChunkAudio(pbc)
 
 	sampleBuffer := make(chan [2]float64, sampleBufferSize)
-	go func(){
+	go func() {
 		defer close(sampleBuffer)
-		for _, sample := range chunk.Samples(){
-			select{
+		for _, sample := range chunk.Samples() {
+			select {
 			case <-ap.ctx.Done():
 				return
 			default:
@@ -138,51 +163,56 @@ func (ap *audioPlayer) loadChunk(idx int) (*audioChunk, error){
 			}
 		}
 	}()
-	
+
 	return &audioChunk{sampleBuffer}, nil
 }
-func (ap *audioPlayer) LoadChunk(idx int) error{
-	if idx == ap.chunkIndex{return nil}
-	if idx == ap.chunkIndex+1{
+func (ap *audioPlayer) LoadChunk(idx int) error {
+	if idx == ap.chunkIndex {
+		return nil
+	}
+	if idx == ap.chunkIndex+1 {
 		*ap.chunk = *ap.nextChunk
-		nc, err := ap.loadChunk(idx+1)
+		nc, err := ap.loadChunk(idx + 1)
 		ap.nextChunk = nc
 		ap.chunkIndex++
 		return err
 	}
 
 	ch, err := ap.loadChunk(idx)
-	if err != nil{return err}
+	if err != nil {
+		return err
+	}
 	ap.chunk = ch
 
-	nch, err := ap.loadChunk(idx+1)
+	nch, err := ap.loadChunk(idx + 1)
 	ap.nextChunk = nch
 	ap.chunkIndex = idx
 	return err
 }
 
-
-func (ap *audioPlayer) newBeepStreamer() beep.Streamer{
-	return beep.StreamerFunc(func(samples [][2]float64) (int, bool){
+func (ap *audioPlayer) newBeepStreamer() beep.Streamer {
+	return beep.StreamerFunc(func(samples [][2]float64) (int, bool) {
 		numRead := 0
-		if ap.chunk == nil{return numRead, false}
+		if ap.chunk == nil {
+			return numRead, false
+		}
 
-		for i := 0; i<len(samples); i++{
-			select{
+		for i := 0; i < len(samples); i++ {
+			select {
 			case <-ap.ctx.Done():
 				break
 			default:
 			}
 
-			if ap.paused{
-				time.Sleep(time.Millisecond*8)
+			if ap.paused {
+				time.Sleep(time.Millisecond * 8)
 				i--
 				continue
 			}
 
 			sample, ok := <-ap.chunk.sampleBuffer
-			if !ok{
-				numRead = i+1
+			if !ok {
+				numRead = i + 1
 				ap.cancel()
 				break
 			}
@@ -190,21 +220,21 @@ func (ap *audioPlayer) newBeepStreamer() beep.Streamer{
 			numRead++
 		}
 
-		if numRead < len(samples){
+		if numRead < len(samples) {
 			return numRead, false
 		}
 		return numRead, true
 	})
 }
 
-func (ap *audioPlayer) updateTimeBar(){
+func (ap *audioPlayer) updateTimeBar() {
 	ticker := time.NewTicker(time.Second)
-	go func(){
+	go func() {
 		defer ticker.Stop()
-		for{
-			select{
+		for {
+			select {
 			case <-ticker.C:
-				if !ap.paused{
+				if !ap.paused {
 					ap.timeBar.Value += time.Second.Seconds()
 					ap.timeBar.Refresh()
 				}
@@ -214,18 +244,20 @@ func (ap *audioPlayer) updateTimeBar(){
 		}
 	}()
 }
-func (ap *audioPlayer) Play(){
+func (ap *audioPlayer) Play() {
 	ap.paused = false
 	ap.playing = true
 	speaker.Play(ap.newBeepStreamer())
 	ap.updateTimeBar()
-	go func(){
-		for{
-			select{
+	go func() {
+		for {
+			select {
 			case <-ap.ctx.Done():
-				if ap.playing{//when sampleBuffer is exhausted, ctx.Done() && playing == true
+				if ap.playing { //when sampleBuffer is exhausted, ctx.Done() && playing == true
 					ap.ctx, ap.cancel = context.WithCancel(context.Background())
-					if err := ap.LoadChunk(ap.chunkIndex+1); err != nil{break}
+					if err := ap.LoadChunk(ap.chunkIndex + 1); err != nil {
+						break
+					}
 
 					speaker.Play(ap.newBeepStreamer())
 					ap.updateTimeBar()
@@ -237,27 +269,25 @@ func (ap *audioPlayer) Play(){
 	}()
 }
 
-func (ap *audioPlayer) Pause(){
+func (ap *audioPlayer) Pause() {
 	ap.paused = !ap.paused
 }
 
-
-func (ap *audioPlayer) Render() fyne.CanvasObject{
+func (ap *audioPlayer) Render() fyne.CanvasObject {
 	var playBtn *widget.Button
-	playBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func(){
-		if !ap.playing{
+	playBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
+		if !ap.playing {
 			ap.Play()
-		}else{
+		} else {
 			ap.Pause()
 		}
 
-		if ap.paused{
+		if ap.paused {
 			playBtn.SetIcon(theme.MediaPlayIcon())
-		}else{
+		} else {
 			playBtn.SetIcon(theme.MediaPauseIcon())
 		}
 	})
-	
-	return container.NewBorder(nil,nil,playBtn,nil, ap.timeBar)
-}
 
+	return container.NewBorder(nil, nil, playBtn, nil, ap.timeBar)
+}

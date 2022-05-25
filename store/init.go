@@ -1,10 +1,9 @@
 package store
 
-import(
+import (
 	crdt "github.com/pilinsin/p2p-verse/crdt"
 	"github.com/pilinsin/util/crypto"
 )
-
 
 func genKp() (crdt.IPrivKey, crdt.IPubKey, error) {
 	kp := crypto.NewSignKeyPair()

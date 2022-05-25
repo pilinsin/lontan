@@ -32,6 +32,6 @@ func (cb *CopyButton) Render() fyne.CanvasObject {
 func (cb *CopyButton) SetText(text string) {
 	cb.label.SetText(text)
 }
-func (cb *CopyButton) GetText() string{
+func (cb *CopyButton) GetText() string {
 	return cb.label.Text
 }

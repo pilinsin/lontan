@@ -1,23 +1,22 @@
 package gui
 
-import(
+import (
 	"context"
 	"path/filepath"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
 
-	crypto "github.com/pilinsin/util/crypto"
 	i2p "github.com/pilinsin/go-libp2p-i2p"
-	pv "github.com/pilinsin/p2p-verse"
-	store "github.com/pilinsin/lontan/store"
 	gutil "github.com/pilinsin/lontan/gui/util"
+	store "github.com/pilinsin/lontan/store"
+	pv "github.com/pilinsin/p2p-verse"
+	crypto "github.com/pilinsin/util/crypto"
 )
-
 
 func (gui *GUI) NewSetupPage() fyne.CanvasObject {
 	form := newBootstrapsForm()
@@ -28,45 +27,47 @@ func (gui *GUI) NewSetupPage() fyne.CanvasObject {
 	titleEntry := widget.NewEntry()
 	titleEntry.SetPlaceHolder("document store title")
 	storeLabel := gutil.NewCopyButton("document store address")
-	stFunc := newStore(gui, titleEntry, baddrsLabel, storeLabel, form)
+	stFunc := newStore(gui, titleEntry, baddrsLabel, storeLabel)
 	storeBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), stFunc)
 
 	userNameEntry := widget.NewEntry()
 	userNameEntry.SetPlaceHolder("user name")
 	uiLabel := gutil.NewCopyButton("user identity")
-	uiBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func(){
+	uiBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
 		kp := crypto.NewSignKeyPair()
 		ui := store.NewUserIdentity(userNameEntry.Text, kp.Verify(), kp.Sign())
 		uiLabel.SetText(ui.ToString())
 	})
 
 	hline := widget.NewRichTextFromMarkdown("-----")
-	baddrs := container.NewBorder(nil,nil,addrsBtn,nil, baddrsLabel.Render())
-	staddr := container.NewBorder(nil,nil,storeBtn,nil, storeLabel.Render())
+	baddrs := container.NewBorder(nil, nil, addrsBtn, nil, baddrsLabel.Render())
+	staddr := container.NewBorder(nil, nil, storeBtn, nil, storeLabel.Render())
 	manObj := container.NewVBox(hline, form.Render(), baddrs, titleEntry, staddr)
 
 	hline2 := widget.NewRichTextFromMarkdown("-----")
-	uiStr := container.NewBorder(nil,nil,uiBtn,nil, uiLabel.Render())
+	uiStr := container.NewBorder(nil, nil, uiBtn, nil, uiLabel.Render())
 	userObj := container.NewVBox(hline2, userNameEntry, uiStr)
 
 	return container.NewGridWithColumns(1, userObj, manObj)
 }
 
-func newBootstrap(gui *GUI, lbl *gutil.CopyButton, form *bootstrapsForm) func(){
-	return func(){
+func newBootstrap(gui *GUI, lbl *gutil.CopyButton, form *bootstrapsForm) func() {
+	return func() {
 		lbl.SetText("processing...")
+
 		bsKey := "setup"
-		if b, exist := gui.bs[bsKey]; exist{
-			b.Close()
-			b = nil
+		if _, exist := gui.bs[bsKey]; exist {
+			gui.bs[bsKey].Close()
+			gui.bs[bsKey] = nil
 		}
 
 		baddrs := form.AddrInfos()
 		b, err := pv.NewBootstrap(i2p.NewI2pHost, baddrs...)
-		if err != nil{
+		if err != nil {
 			lbl.SetText("bootstrap list address")
 			return
 		}
+
 		baddrs = append(baddrs, b.AddrInfo())
 		s := pv.AddrInfosToString(baddrs...)
 		if s == "" {
@@ -78,28 +79,30 @@ func newBootstrap(gui *GUI, lbl *gutil.CopyButton, form *bootstrapsForm) func(){
 	}
 }
 
-func newStore(gui *GUI, te *widget.Entry, bLabel, stLabel *gutil.CopyButton, form *bootstrapsForm) func(){
-	return func(){
-		if bLabel.GetText() == "bootstrap list address"{return}
+func newStore(gui *GUI, te *widget.Entry, bLabel, stLabel *gutil.CopyButton) func() {
+	return func() {
+		if bLabel.GetText() == "bootstrap list address" {
+			return
+		}
 
 		stLabel.SetText("processing...")
 		storesKey := "setup"
 		baseDir := filepath.Join("stores", storesKey)
-		if st, exist := gui.stores[storesKey]; exist{
-			st.Close()
-			st = nil
+		if _, exist := gui.stores[storesKey]; exist {
+			gui.stores[storesKey].Close()
+			gui.stores[storesKey] = nil
 		}
 
-		st, addr, err := store.NewDocumentStore(context.Background(), te.Text, bLabel.GetText(), baseDir)
-		if err != nil{
+		st, err := store.NewDocumentStore(context.Background(), te.Text, bLabel.GetText(), baseDir)
+		if err != nil {
 			stLabel.SetText("document store address")
-		}else{
+		} else {
 			gui.stores[storesKey] = st
-			stLabel.SetText(addr)
+			stLabel.SetText(st.Address())
 		}
+
 	}
 }
-
 
 func addrInfoMapToSlice(m map[string]peer.AddrInfo) []peer.AddrInfo {
 	ais := make([]peer.AddrInfo, len(m))

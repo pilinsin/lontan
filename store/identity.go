@@ -1,27 +1,28 @@
 package store
 
-import(
-	"errors"
+import (
 	"encoding/base64"
+	"errors"
 	proto "google.golang.org/protobuf/proto"
 
 	pb "github.com/pilinsin/lontan/store/pb"
 	"github.com/pilinsin/util/crypto"
 )
 
-type UserIdentity struct{
-	userName	string
-	verfKey		crypto.IVerfKey
-	signKey		crypto.ISignKey
+type UserIdentity struct {
+	userName string
+	verfKey  crypto.IVerfKey
+	signKey  crypto.ISignKey
 }
-func NewUserIdentity(name string, verf crypto.IVerfKey, sign crypto.ISignKey) *UserIdentity{
+
+func NewUserIdentity(name string, verf crypto.IVerfKey, sign crypto.ISignKey) *UserIdentity {
 	return &UserIdentity{name, verf, sign}
 }
-func (ui UserIdentity) UserName() string{return ui.userName}
-func (ui UserIdentity) Verify() crypto.IVerfKey{return ui.verfKey}
-func (ui UserIdentity) Sign() crypto.ISignKey{return ui.signKey}
+func (ui UserIdentity) UserName() string        { return ui.userName }
+func (ui UserIdentity) Verify() crypto.IVerfKey { return ui.verfKey }
+func (ui UserIdentity) Sign() crypto.ISignKey   { return ui.signKey }
 
-func (ui *UserIdentity) Marshal() []byte{
+func (ui *UserIdentity) Marshal() []byte {
 	mv, _ := crypto.MarshalVerfKey(ui.verfKey)
 	ms, _ := crypto.MarshalSignKey(ui.signKey)
 	mui := &pb.Identity{
