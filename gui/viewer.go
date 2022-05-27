@@ -11,14 +11,14 @@ import (
 	ipfs "github.com/pilinsin/p2p-verse/ipfs"
 )
 
-func loadMedia(tp, cid string, is ipfs.Ipfs) fyne.CanvasObject {
+func loadMedia(gui *GUI, tp, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	switch tp {
 	case "text":
 		return LoadText(cid, is)
 	case "image":
-		return LoadImage(cid, is)
+		return LoadImage(gui, cid, is)
 	case "pdf":
-		return LoadPdf(cid, is)
+		return LoadPdf(gui, cid, is)
 	case "video":
 		return LoadVideo(cid, is)
 	case "audio":
@@ -53,14 +53,14 @@ func descriptionLabel(text string) fyne.CanvasObject {
 	return lbl
 }
 
-func NewViewerPage(nmDoc *store.NamedDocument, st store.IDocumentStore) fyne.CanvasObject {
+func NewViewerPage(gui *GUI, nmDoc *store.NamedDocument, st store.IDocumentStore) fyne.CanvasObject {
 	if nmDoc == nil {
 		return container.NewCenter(widget.NewLabel("no document"))
 	}
 
 	medias := make([]fyne.CanvasObject, len(nmDoc.Cids))
 	for idx, cid := range nmDoc.Cids {
-		medias[idx] = loadMedia(cid.Type, cid.Cid, st.Ipfs())
+		medias[idx] = loadMedia(gui, cid.Type, cid.Cid, st.Ipfs())
 	}
 
 	name := descriptionLabel(nmDoc.Name)

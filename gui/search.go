@@ -42,7 +42,7 @@ func (gui *GUI) NewSearchPage(w fyne.Window, title string, st store.IDocumentSto
 	newViewPageButton := func(ndoc *store.NamedDocument, st store.IDocumentStore) fyne.CanvasObject {
 		hline := widget.NewRichTextFromMarkdown("-----")
 		btn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
-			gui.addPageToTabs(title+"_view_"+ndoc.Title, NewViewerPage(ndoc, st))
+			gui.addPageToTabs(title+"_view_"+ndoc.Title, NewViewerPage(gui, ndoc, st))
 		})
 		return container.NewBorder(hline, nil, btn, nil, newDocumentCard(ndoc))
 	}

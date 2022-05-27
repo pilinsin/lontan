@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"fmt"
+
 	"bytes"
 	"errors"
 	"io"
@@ -8,6 +10,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	pb "github.com/pilinsin/lontan/store/pb"
@@ -44,12 +47,45 @@ func loadImage(r io.Reader) (fyne.CanvasObject, error) {
 	res := &fyne.StaticResource{name, data}
 	imgCanvas := canvas.NewImageFromResource(res)
 	imgCanvas.FillMode = canvas.ImageFillContain
-	imgCanvas.Resize(fyne.NewSize(400, 400))
 
-	return container.NewGridWrap(fyne.NewSize(400, 400), imgCanvas), nil
-	//return container.NewGridWithColumns(1, imgCanvas), nil
+	return imgCanvas, nil
 }
-func LoadImage(cid string, is ipfs.Ipfs) fyne.CanvasObject {
+
+func withZoom(obj fyne.CanvasObject) fyne.CanvasObject{
+	baseSize := obj.Size()
+
+	var page *fyne.Container
+	zoomInbtn := widget.NewButtonWithIcon("", theme.ZoomInIcon(), func(){
+		if obj.Size().Height < baseSize.Height*2{
+			fmt.Println("aaa", obj.Size())
+			width := obj.Size().Width
+			height := obj.Size().Height
+			obj.Resize(fyne.NewSize(width+50, height+50))
+
+			page.Objects[0] = container.NewScroll(obj)
+			page.Refresh()
+		}
+	})
+	
+	zoomOutbtn := widget.NewButtonWithIcon("", theme.ZoomOutIcon(), func(){
+		if obj.Size().Height > baseSize.Height{
+			fmt.Println("bbb", obj.Size())
+			width := obj.Size().Width
+			height := obj.Size().Height
+			obj.Resize(fyne.NewSize(width-50, height-50))
+			
+			page.Objects[0] = container.NewScroll(obj)
+			page.Refresh()
+		}
+	})
+	zoomBtns := container.NewHBox(zoomInbtn, zoomOutbtn)
+
+	
+	page = container.NewBorder(container.NewBorder(nil,nil,zoomBtns,nil),nil,nil,nil, obj)
+	return page
+}
+
+func LoadImage(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	r, err := is.GetReader(cid)
 	if err != nil {
 		return errorLabel("load image error (ipfs)")
@@ -59,7 +95,12 @@ func LoadImage(cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	if err != nil {
 		return errorLabel("load image error")
 	}
-	return img
+	imgCanvas := container.NewGridWrap(fyne.NewSize(400, 400), img)
+	zoomBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func(){
+		name := img.(*canvas.Image).Resource.Name()
+		gui.addPageToTabs(name, container.NewMax(img))
+	})
+	return container.NewBorder(container.NewBorder(nil,nil,zoomBtn,nil),nil,nil,nil,imgCanvas)
 }
 
 func LoadText(cid string, is ipfs.Ipfs) fyne.CanvasObject {
@@ -93,7 +134,8 @@ func LoadVideo(cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	return vp.Render()
 }
 
-func LoadPdf(cid string, is ipfs.Ipfs) fyne.CanvasObject {
+
+func LoadPdf(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	m, err := is.Get(cid)
 	if err != nil {
 		return errorLabel("load pdf error (ipfs)")
@@ -106,17 +148,24 @@ func LoadPdf(cid string, is ipfs.Ipfs) fyne.CanvasObject {
 
 	mImgs := pbPdf.GetImages()
 	imgCanvases := make([]fyne.CanvasObject, len(mImgs))
+	zoomImgs := make([]fyne.CanvasObject, len(mImgs))
 	for idx, mImg := range mImgs {
 		imgCanvas, err := loadImage(bytes.NewBuffer(mImg))
 		if err != nil {
 			return errorLabel("load pdf error")
 		}
-		imgCanvases[idx] = imgCanvas
+		imgCanvases[idx] = container.NewGridWrap(fyne.NewSize(400, 400), imgCanvas)
+		zoomImgs[idx] = container.NewMax(imgCanvas)
 	}
 	if len(imgCanvases) == 0 {
 		return errorLabel("load pdf error")
 	}
 
 	player := NewPdfPlayer(imgCanvases...)
-	return player.Render()
+	zoomBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func(){
+		zoomPlayer := NewPdfPlayer(zoomImgs...)
+		name := zoomImgs[0].(*fyne.Container).Objects[0].(*canvas.Image).Resource.Name()
+		gui.addPageToTabs(name, zoomPlayer.Render())
+	})
+	return container.NewBorder(container.NewBorder(nil,nil,zoomBtn,nil),nil,nil,nil,player.Render())
 }

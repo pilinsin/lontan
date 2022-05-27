@@ -23,11 +23,10 @@ func marshalPdfTopPage(pdfPath, outName string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	mImg, err := bimg.NewImage(img).Resize(400, 400)
 
 	pbImage := &pb.Image{
 		Name: outName,
-		Data: mImg,
+		Data: img,
 	}
 	return proto.Marshal(pbImage)
 }
