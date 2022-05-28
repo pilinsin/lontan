@@ -1,8 +1,6 @@
 package gui
 
 import (
-	//"fmt"
-
 	"bytes"
 	"errors"
 	"io"
@@ -50,41 +48,40 @@ func loadImage(r io.Reader) (fyne.CanvasObject, error) {
 
 	return imgCanvas, nil
 }
-/*
+
 func withZoom(obj fyne.CanvasObject) fyne.CanvasObject{
 	baseSize := obj.Size()
 
 	var page *fyne.Container
 	zoomInbtn := widget.NewButtonWithIcon("", theme.ZoomInIcon(), func(){
 		if obj.Size().Height < baseSize.Height*2{
-			fmt.Println("aaa", obj.Size())
 			width := obj.Size().Width
 			height := obj.Size().Height
 			obj.Resize(fyne.NewSize(width+50, height+50))
-
-			page.Objects[0] = container.NewScroll(obj)
+			
+			grid := container.NewGridWrap(obj.Size(), obj)
+			page.Objects[0] = container.NewScroll(grid)
 			page.Refresh()
 		}
 	})
 	
 	zoomOutbtn := widget.NewButtonWithIcon("", theme.ZoomOutIcon(), func(){
 		if obj.Size().Height > baseSize.Height{
-			fmt.Println("bbb", obj.Size())
 			width := obj.Size().Width
 			height := obj.Size().Height
 			obj.Resize(fyne.NewSize(width-50, height-50))
 			
-			page.Objects[0] = container.NewScroll(obj)
+			grid := container.NewGridWrap(obj.Size(), obj)
+			page.Objects[0] = container.NewScroll(grid)
 			page.Refresh()
 		}
 	})
 	zoomBtns := container.NewHBox(zoomInbtn, zoomOutbtn)
 
-	
 	page = container.NewBorder(container.NewBorder(nil,nil,zoomBtns,nil),nil,nil,nil, obj)
 	return page
 }
-*/
+
 
 func LoadImage(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	r, err := is.GetReader(cid)
@@ -99,7 +96,7 @@ func LoadImage(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	imgCanvas := container.NewGridWrap(fyne.NewSize(400, 400), img)
 	zoomBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func(){
 		name := img.(*canvas.Image).Resource.Name()
-		gui.addPageToTabs(name, container.NewMax(img))
+		gui.addPageToTabs(name, withZoom(img))
 	})
 	return container.NewBorder(container.NewBorder(nil,nil,zoomBtn,nil),nil,nil,nil,imgCanvas)
 }
@@ -156,7 +153,7 @@ func LoadPdf(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 			return errorLabel("load pdf error")
 		}
 		imgCanvases[idx] = container.NewGridWrap(fyne.NewSize(400, 400), imgCanvas)
-		zoomImgs[idx] = container.NewMax(imgCanvas)
+		zoomImgs[idx] = withZoom(imgCanvas)
 	}
 	if len(imgCanvases) == 0 {
 		return errorLabel("load pdf error")
