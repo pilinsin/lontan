@@ -65,19 +65,19 @@ func (gui *GUI) addPageToTabs(title string, page fyne.CanvasObject) {
 	gui.page.Refresh()
 }
 
-func (gui *GUI) loadSearchPage(addr string) (string, fyne.CanvasObject) {
-	addrs := strings.Split(strings.TrimPrefix(addr, "/"), "/")
-	if len(addrs) != 3 {
+func (gui *GUI) loadSearchPage(bAddr, stAddr string) (string, fyne.CanvasObject) {
+	addrs := strings.Split(stAddr, "/")
+	if len(addrs) != 2 {
 		return "", nil
 	}
-	title := addrs[1]
+	title, rawStAddr := addrs[0], addrs[1]
 
-	storesKey := storeHash(title, addrs[2])
+	storesKey := storeHash(title, rawStAddr)
 	st, ok := gui.stores[storesKey]
 	if !ok {
 		baseDir := filepath.Join("stores", storesKey)
 		var err error
-		st, err = store.LoadDocumentStore(context.Background(), addr, baseDir)
+		st, err = store.LoadDocumentStore(context.Background(), bAddr+"/"+stAddr, baseDir)
 		if err != nil {
 			return "", nil
 		}
@@ -88,12 +88,16 @@ func (gui *GUI) loadSearchPage(addr string) (string, fyne.CanvasObject) {
 }
 
 func (gui *GUI) loadPageForm() fyne.CanvasObject {
-	addrEntry := widget.NewEntry()
-	addrEntry.PlaceHolder = "Store Address"
+	bAddrEntry := widget.NewEntry()
+	bAddrEntry.SetPlaceHolder("Bootstraps Address")
+	stAddrEntry := widget.NewEntry()
+	stAddrEntry.SetPlaceHolder("Store Address")
+	addrEntry := container.NewGridWithColumns(2, bAddrEntry, stAddrEntry)
 
 	onTapped := func() {
-		title, loadPage := gui.loadSearchPage(addrEntry.Text)
-		addrEntry.SetText("")
+		title, loadPage := gui.loadSearchPage(bAddrEntry.Text, stAddrEntry.Text)
+		bAddrEntry.SetText("")
+		stAddrEntry.SetText("")
 		if loadPage == nil {
 			return
 		}

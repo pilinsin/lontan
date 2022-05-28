@@ -1,7 +1,7 @@
 package gui
 
 import (
-	"fmt"
+	//"fmt"
 
 	"bytes"
 	"errors"
@@ -50,7 +50,7 @@ func loadImage(r io.Reader) (fyne.CanvasObject, error) {
 
 	return imgCanvas, nil
 }
-
+/*
 func withZoom(obj fyne.CanvasObject) fyne.CanvasObject{
 	baseSize := obj.Size()
 
@@ -84,6 +84,7 @@ func withZoom(obj fyne.CanvasObject) fyne.CanvasObject{
 	page = container.NewBorder(container.NewBorder(nil,nil,zoomBtns,nil),nil,nil,nil, obj)
 	return page
 }
+*/
 
 func LoadImage(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	r, err := is.GetReader(cid)

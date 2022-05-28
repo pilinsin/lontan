@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"strings"
 	"path/filepath"
 
 	"fyne.io/fyne/v2"
@@ -61,14 +62,13 @@ func newBootstrap(gui *GUI, lbl *gutil.CopyButton, form *bootstrapsForm) func() 
 			gui.bs[bsKey] = nil
 		}
 
-		baddrs := form.AddrInfos()
-		b, err := pv.NewBootstrap(i2p.NewI2pHost, baddrs...)
+		b, err := pv.NewBootstrap(i2p.NewI2pHost, form.AddrInfos()...)
 		if err != nil {
 			lbl.SetText("bootstrap list address")
 			return
 		}
 
-		baddrs = append(baddrs, b.AddrInfo())
+		baddrs := append(b.ConnectedPeers(), b.AddrInfo())
 		s := pv.AddrInfosToString(baddrs...)
 		if s == "" {
 			lbl.SetText("bootstrap list address")
@@ -98,7 +98,9 @@ func newStore(gui *GUI, te *widget.Entry, bLabel, stLabel *gutil.CopyButton) fun
 			stLabel.SetText("document store address")
 		} else {
 			gui.stores[storesKey] = st
-			stLabel.SetText(st.Address())
+			addrs := strings.Split(st.Address(), "/")
+			addr := strings.Join(addrs[1:], "/")
+			stLabel.SetText(addr)
 		}
 
 	}
