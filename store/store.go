@@ -54,13 +54,13 @@ func NewDocumentStore(ctx context.Context, title, bAddr, baseDir string) (IDocum
 	dirCloser := func() { os.Remove(baseDir) }
 
 	ipfsDir := filepath.Join(baseDir, "ipfs")
-	is, err := ipfs.NewIpfsStore(i2p.NewI2pHost, ipfsDir, "ipfs_kw", save, false, bootstraps...)
+	is, err := ipfs.NewIpfsStore(i2p.NewI2pHost, ipfsDir, save, bootstraps...)
 	if err != nil {
 		return nil, err
 	}
 
 	storeDir := filepath.Join(baseDir, "store")
-	v := crdt.NewVerse(i2p.NewI2pHost, storeDir, save, false, bootstraps...)
+	v := crdt.NewVerse(i2p.NewI2pHost, storeDir, save, bootstraps...)
 	st, err := v.NewStore(pv.RandString(8), "signature")
 	if err != nil {
 		is.Close()
@@ -83,13 +83,13 @@ func LoadDocumentStore(ctx context.Context, addr, baseDir string) (IDocumentStor
 	save := true
 
 	ipfsDir := filepath.Join(baseDir, "ipfs")
-	is, err := ipfs.NewIpfsStore(i2p.NewI2pHost, ipfsDir, "ipfs_kw", save, false, bootstraps...)
+	is, err := ipfs.NewIpfsStore(i2p.NewI2pHost, ipfsDir, save, bootstraps...)
 	if err != nil {
 		return nil, err
 	}
 
 	storeDir := filepath.Join(baseDir, "store")
-	v := crdt.NewVerse(i2p.NewI2pHost, storeDir, save, false, bootstraps...)
+	v := crdt.NewVerse(i2p.NewI2pHost, storeDir, save, bootstraps...)
 	opt := &crdt.StoreOpts{Pub: ui.verfKey, Priv: ui.signKey}
 	st, err := v.LoadStore(ctx, sAddr, "signature", opt)
 	if err != nil {

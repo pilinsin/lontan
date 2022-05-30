@@ -75,7 +75,7 @@ func (gui *GUI) loadSearchPage(bAddr, stAddr string) (string, fyne.CanvasObject)
 	storesKey := storeHash(title, rawStAddr)
 	st, ok := gui.stores[storesKey]
 	if !ok {
-		baseDir := filepath.Join("stores", storesKey)
+		baseDir := store.BaseDir(filepath.Join("stores", storesKey))
 		var err error
 		st, err = store.LoadDocumentStore(context.Background(), bAddr+"/"+stAddr, baseDir)
 		if err != nil {

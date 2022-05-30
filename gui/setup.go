@@ -87,12 +87,12 @@ func newStore(gui *GUI, te *widget.Entry, bLabel, stLabel *gutil.CopyButton) fun
 
 		stLabel.SetText("processing...")
 		storesKey := "setup"
-		baseDir := filepath.Join("stores", storesKey)
 		if _, exist := gui.stores[storesKey]; exist {
 			gui.stores[storesKey].Close()
 			gui.stores[storesKey] = nil
 		}
 
+		baseDir := store.BaseDir(filepath.Join("stores", storesKey))
 		st, err := store.NewDocumentStore(context.Background(), te.Text, bLabel.GetText(), baseDir)
 		if err != nil {
 			stLabel.SetText("document store address")
