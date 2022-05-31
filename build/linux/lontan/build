@@ -1,11 +1,11 @@
-fyne package -os linux -icon ../../Icon.png
-tar xJvf easy-voting.tar.xz
-mkdir easy-voting
-mv Makefile easy-voting
-mv usr easy-voting/usr
+fyne package -os linux -icon ../../logo.svg
+tar xJvf lontan.tar.xz
+mkdir lontan
+rm Makefile
+mv usr lontan/usr
 
-ln -s -r easy-voting/usr/local/bin/easy-voting easy-voting/easy-voting
+ln -s -r lontan/usr/local/bin/lontan lontan/lontan
 
 
-tar cJvf easy-voting.tar.xz easy-voting
-rm easy-voting
+tar cJvf lontan.tar.xz lontan
+rm -r lontan

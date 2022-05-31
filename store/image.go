@@ -1,15 +1,21 @@
 package store
 
 import (
-	"bytes"
-	proto "google.golang.org/protobuf/proto"
 	"io"
+	"bytes"
+
+	bimg "github.com/h2non/bimg"
+	proto "google.golang.org/protobuf/proto"
 
 	pb "github.com/pilinsin/lontan/store/pb"
 )
-
+// convert to webp
 func EncodeImage(name string, r io.Reader) (io.Reader, error) {
-	data, err := io.ReadAll(r)
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	data, err := bimg.NewImage(b).Convert(bimg.WEBP)
 	if err != nil {
 		return nil, err
 	}
