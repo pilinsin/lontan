@@ -2,8 +2,8 @@ package gui
 
 import (
 	"context"
-	"strings"
 	"path/filepath"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
