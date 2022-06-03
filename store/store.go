@@ -98,7 +98,6 @@ func LoadDocumentStore(ctx context.Context, addr, baseDir string) (IDocumentStor
 	}
 	ss := st.(crdt.ISignatureStore)
 	ctx, cancel := context.WithCancel(context.Background())
-	autoSync(ctx, ss)
 
 	return &documentStore{ctx, cancel, func() {}, addr, ui.userName, is, ss}, nil
 }
@@ -124,20 +123,6 @@ func parseUserIdentity(ui *UserIdentity) *UserIdentity {
 	}
 
 	return ui
-}
-
-func autoSync(ctx context.Context, ss crdt.IStore) {
-	ticker := time.NewTicker(time.Second * 30)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				ss.Sync()
-			}
-		}
-	}()
 }
 
 func (ds *documentStore) Close() {
