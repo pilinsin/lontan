@@ -68,7 +68,6 @@ func NewDocumentStore(ctx context.Context, title, bAddr, baseDir string) (IDocum
 	}
 	ss := st.(crdt.ISignatureStore)
 	ctx, cancel := context.WithCancel(context.Background())
-	autoSync(ctx, ss)
 
 	addr := bAddr + "/" + title + "/" + ss.Address()
 	return &documentStore{ctx, cancel, dirCloser, addr, "Anonymous", is, ss}, nil
