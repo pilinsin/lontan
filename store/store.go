@@ -48,7 +48,7 @@ type documentStore struct {
 	ss        crdt.ISignatureStore
 }
 
-func NewDocumentStore(ctx context.Context, title, bAddr, baseDir string) (IDocumentStore, error) {
+func NewDocumentStore(title, bAddr, baseDir string) (IDocumentStore, error) {
 	bootstraps := pv.AddrInfosFromString(bAddr)
 	save := false
 	dirCloser := func() { os.Remove(baseDir) }
@@ -72,7 +72,7 @@ func NewDocumentStore(ctx context.Context, title, bAddr, baseDir string) (IDocum
 	addr := bAddr + "/" + title + "/" + ss.Address()
 	return &documentStore{ctx, cancel, dirCloser, addr, "Anonymous", is, ss}, nil
 }
-func LoadDocumentStore(ctx context.Context, addr, baseDir string) (IDocumentStore, error) {
+func LoadDocumentStore(addr, baseDir string) (IDocumentStore, error) {
 	ui := parseUserIdentity(nil)
 	bAddr, sAddr, err := parseAddr(addr)
 	if err != nil {
@@ -90,7 +90,7 @@ func LoadDocumentStore(ctx context.Context, addr, baseDir string) (IDocumentStor
 	storeDir := filepath.Join(baseDir, "store")
 	v := crdt.NewVerse(i2p.NewI2pHost, storeDir, save, bootstraps...)
 	opt := &crdt.StoreOpts{Pub: ui.verfKey, Priv: ui.signKey}
-	st, err := v.LoadStore(ctx, sAddr, "signature", opt)
+	st, err := v.NewStore(sAddr, "signature", opt)
 	if err != nil {
 		is.Close()
 		return nil, err

@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"context"
 	"encoding/base64"
 	"golang.org/x/crypto/argon2"
 	"path/filepath"
@@ -77,7 +76,7 @@ func (gui *GUI) loadSearchPage(bAddr, stAddr string) (string, fyne.CanvasObject)
 	if !ok {
 		baseDir := store.BaseDir(filepath.Join("stores", storesKey))
 		var err error
-		st, err = store.LoadDocumentStore(context.Background(), bAddr+"/"+stAddr, baseDir)
+		st, err = store.LoadDocumentStore(bAddr+"/"+stAddr, baseDir)
 		if err != nil {
 			return "", nil
 		}

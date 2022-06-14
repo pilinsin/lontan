@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"context"
 	"path/filepath"
 	"strings"
 
@@ -93,7 +92,7 @@ func newStore(gui *GUI, te *widget.Entry, bLabel, stLabel *gutil.CopyButton) fun
 		}
 
 		baseDir := store.BaseDir(filepath.Join("stores", storesKey))
-		st, err := store.NewDocumentStore(context.Background(), te.Text, bLabel.GetText(), baseDir)
+		st, err := store.NewDocumentStore(te.Text, bLabel.GetText(), baseDir)
 		if err != nil {
 			stLabel.SetText("document store address")
 		} else {
