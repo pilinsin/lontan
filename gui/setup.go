@@ -15,7 +15,6 @@ import (
 	gutil "github.com/pilinsin/lontan/gui/util"
 	store "github.com/pilinsin/lontan/store"
 	pv "github.com/pilinsin/p2p-verse"
-	crypto "github.com/pilinsin/util/crypto"
 )
 
 func (gui *GUI) NewSetupPage() fyne.CanvasObject {
@@ -34,19 +33,19 @@ func (gui *GUI) NewSetupPage() fyne.CanvasObject {
 	userNameEntry.SetPlaceHolder("user name")
 	uiLabel := gutil.NewCopyButton("user identity")
 	uiBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
-		kp := crypto.NewSignKeyPair()
+		kp := store.NewKeyPair()
 		ui := store.NewUserIdentity(userNameEntry.Text, kp.Verify(), kp.Sign())
 		uiLabel.SetText(ui.ToString())
 	})
+
+	hline2 := widget.NewRichTextFromMarkdown("-----")
+	uiStr := container.NewBorder(nil, nil, uiBtn, nil, uiLabel.Render())
+	userObj := container.NewVBox(hline2, userNameEntry, uiStr)
 
 	hline := widget.NewRichTextFromMarkdown("-----")
 	baddrs := container.NewBorder(nil, nil, addrsBtn, nil, baddrsLabel.Render())
 	staddr := container.NewBorder(nil, nil, storeBtn, nil, storeLabel.Render())
 	manObj := container.NewVBox(hline, form.Render(), baddrs, titleEntry, staddr)
-
-	hline2 := widget.NewRichTextFromMarkdown("-----")
-	uiStr := container.NewBorder(nil, nil, uiBtn, nil, uiLabel.Render())
-	userObj := container.NewVBox(hline2, userNameEntry, uiStr)
 
 	return container.NewGridWithColumns(1, userObj, manObj)
 }

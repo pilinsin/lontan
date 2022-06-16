@@ -100,7 +100,6 @@ func (gui *GUI) loadPageForm() fyne.CanvasObject {
 		if loadPage == nil {
 			return
 		}
-		//page.SetMinSize(fyne,NewSize(101.1,201.2))
 		gui.addPageToTabs(title, loadPage)
 	}
 	loadBtn := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), onTapped)

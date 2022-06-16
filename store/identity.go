@@ -6,25 +6,24 @@ import (
 	proto "google.golang.org/protobuf/proto"
 
 	pb "github.com/pilinsin/lontan/store/pb"
-	"github.com/pilinsin/util/crypto"
 )
 
 type UserIdentity struct {
 	userName string
-	verfKey  crypto.IVerfKey
-	signKey  crypto.ISignKey
+	verfKey  IVerfKey
+	signKey  ISignKey
 }
 
-func NewUserIdentity(name string, verf crypto.IVerfKey, sign crypto.ISignKey) *UserIdentity {
+func NewUserIdentity(name string, verf IVerfKey, sign ISignKey) *UserIdentity {
 	return &UserIdentity{name, verf, sign}
 }
-func (ui UserIdentity) UserName() string        { return ui.userName }
-func (ui UserIdentity) Verify() crypto.IVerfKey { return ui.verfKey }
-func (ui UserIdentity) Sign() crypto.ISignKey   { return ui.signKey }
+func (ui UserIdentity) UserName() string { return ui.userName }
+func (ui UserIdentity) Verify() IVerfKey { return ui.verfKey }
+func (ui UserIdentity) Sign() ISignKey   { return ui.signKey }
 
 func (ui *UserIdentity) Marshal() []byte {
-	mv, _ := crypto.MarshalVerfKey(ui.verfKey)
-	ms, _ := crypto.MarshalSignKey(ui.signKey)
+	mv, _ := ui.verfKey.Raw()
+	ms, _ := ui.signKey.Raw()
 	mui := &pb.Identity{
 		Name: ui.userName,
 		Verf: mv,
@@ -39,11 +38,11 @@ func (ui *UserIdentity) Unmarshal(m []byte) error {
 		return err
 	}
 
-	verfKey, err := crypto.UnmarshalVerfKey(mui.GetVerf())
+	verfKey, err := UnmarshalVerf(mui.GetVerf())
 	if err != nil {
 		return err
 	}
-	signKey, err := crypto.UnmarshalSignKey(mui.GetSign())
+	signKey, err := UnmarshalSign(mui.GetSign())
 	if err != nil {
 		return err
 	}

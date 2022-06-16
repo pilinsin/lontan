@@ -52,7 +52,7 @@ require (
 	github.com/hajimehoshi/oto v0.7.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/hashicorp/golang-lru v0.5.4 // indirect
+	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d // indirect
 	github.com/hhrutter/lzw v0.0.0-20190829144645-6f07a24e8650 // indirect
 	github.com/hhrutter/tiff v0.0.0-20190829141212-736cae8d0bc7 // indirect
 	github.com/hsanjuan/ipfs-lite v1.4.0 // indirect
@@ -172,7 +172,7 @@ require (
 	github.com/pilinsin/go-libp2p-i2p v0.0.0-20220531231836-cff14699ec4e // indirect
 	github.com/pilinsin/go-libp2p-i2p-transport v0.0.0-20220531223145-5313be76581a // indirect
 	github.com/pilinsin/p2p-verse v0.0.0-20220614001151-93adb1806c25 // indirect
-	github.com/pilinsin/util v0.0.0-20220524095113-55c47771dda7 // indirect
+	github.com/pilinsin/util v0.0.0-20220615082557-ea19d4096491 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/polydawn/refmt v0.0.0-20201211092308-30ac6d18308e // indirect
 	github.com/prometheus/client_golang v1.12.2 // indirect
