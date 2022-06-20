@@ -42,7 +42,10 @@ func loadImage(r io.Reader) (fyne.CanvasObject, error) {
 		return nil, errors.New("invalid image")
 	}
 
-	res := &fyne.StaticResource{name, data}
+	res := &fyne.StaticResource{
+		StaticName:    name,
+		StaticContent: data,
+	}
 	imgCanvas := canvas.NewImageFromResource(res)
 	imgCanvas.FillMode = canvas.ImageFillContain
 
@@ -111,7 +114,7 @@ func LoadText(cid string, is ipfs.Ipfs) fyne.CanvasObject {
 		return errorLabel("load text error")
 	}
 
-	rt := widget.NewRichTextFromMarkdown(string(buf.Bytes()))
+	rt := widget.NewRichTextFromMarkdown(buf.String())
 	rt.Wrapping = fyne.TextWrapWord
 	return rt
 }

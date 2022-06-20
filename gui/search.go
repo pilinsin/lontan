@@ -64,7 +64,7 @@ func (gui *GUI) NewSearchPage(w fyne.Window, title string, st store.IDocumentSto
 		es := strings.Fields(searchEntry.Text)
 		qf := modeToQueryFunc(modeSelector.Selected)
 		q := qf(es...)
-		q.Orders = []query.Order{store.TimeOrder{orderBtn.Selected == order[0]}}
+		q.Orders = []query.Order{store.TimeOrder{FrontNew: orderBtn.Selected == order[0]}}
 		var err error
 		ndocs, err = st.Query(q)
 		if err != nil {
@@ -96,24 +96,24 @@ func modeToQueryFunc(mode string) queryFunc {
 			fs := make([]query.Filter, len(strs))
 			for idx, str := range strs {
 				if strings.Contains(str, "/") {
-					fs[idx] = crdt.KeyMatchFilter{str}
+					fs[idx] = crdt.KeyMatchFilter{Key: str}
 				} else {
-					fs[idx] = crdt.KeyExistFilter{str}
+					fs[idx] = crdt.KeyExistFilter{Key: str}
 				}
 			}
 			return query.Query{Filters: fs}
 		case "title":
 			fs := make([]query.Filter, len(strs))
 			for idx, str := range strs {
-				fs[idx] = store.TitleFilter{str}
+				fs[idx] = store.TitleFilter{Title: str}
 			}
 			return query.Query{Filters: fs}
 		case "cid":
-			return query.Query{Filters: []query.Filter{store.CidsFilter{strs}}}
+			return query.Query{Filters: []query.Filter{store.CidsFilter{Cids: strs}}}
 		case "document type":
-			return query.Query{Filters: []query.Filter{store.DocTypesFilter{strs}}}
+			return query.Query{Filters: []query.Filter{store.DocTypesFilter{DocTypes: strs}}}
 		case "tag":
-			return query.Query{Filters: []query.Filter{store.TagsFilter{strs}}}
+			return query.Query{Filters: []query.Filter{store.TagsFilter{Tags: strs}}}
 		default:
 			return query.Query{}
 		}

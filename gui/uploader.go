@@ -19,11 +19,11 @@ import (
 )
 
 var exts = map[string]struct{}{
-	"text":  struct{}{},
-	"image": struct{}{},
-	"pdf":   struct{}{},
-	"video": struct{}{},
-	"audio": struct{}{},
+	"text":  {},
+	"image": {},
+	"pdf":   {},
+	"video": {},
+	"audio": {},
 }
 
 func sliceToMap(slc []string) map[string]struct{} {

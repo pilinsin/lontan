@@ -2,9 +2,10 @@ package gui
 
 import (
 	"encoding/base64"
-	"golang.org/x/crypto/argon2"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/crypto/argon2"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"

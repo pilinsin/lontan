@@ -1,8 +1,9 @@
 package store
 
 import (
-	proto "google.golang.org/protobuf/proto"
 	"time"
+
+	proto "google.golang.org/protobuf/proto"
 
 	pb "github.com/pilinsin/lontan/store/pb"
 )
@@ -10,7 +11,7 @@ import (
 func mapToSlice(mp map[string]struct{}) []string {
 	slice := make([]string, len(mp))
 	idx := 0
-	for k, _ := range mp {
+	for k := range mp {
 		slice[idx] = k
 		idx++
 	}
