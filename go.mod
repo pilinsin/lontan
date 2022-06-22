@@ -172,7 +172,7 @@ require (
 	github.com/pilinsin/go-libp2p-i2p v0.0.0-20220620090204-ec2f18520d57 // indirect
 	github.com/pilinsin/go-libp2p-i2p-transport v0.0.0-20220620062609-426a5940ab1f // indirect
 	github.com/pilinsin/p2p-verse v0.0.0-20220620092214-95f8a64837b8 // indirect
-	github.com/pilinsin/util v0.0.0-20220615082557-ea19d4096491 // indirect
+	github.com/pilinsin/util v0.0.0-20220622032407-1029e13712ac // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/polydawn/refmt v0.0.0-20201211092308-30ac6d18308e // indirect
 	github.com/prometheus/client_golang v1.12.2 // indirect

@@ -2,8 +2,8 @@ package store
 
 import (
 	crdt "github.com/pilinsin/p2p-verse/crdt"
-	isign "github.com/pilinsin/util/crypto/sign"
-	ed25519 "github.com/pilinsin/util/crypto/sign/ed25519"
+	isign "github.com/pilinsin/util/sign"
+	ed25519 "github.com/pilinsin/util/sign/ed25519"
 )
 
 type ISignKey = isign.ISignKey
