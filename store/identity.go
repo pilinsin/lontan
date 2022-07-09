@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/base64"
 	"errors"
+
 	proto "google.golang.org/protobuf/proto"
 
 	pb "github.com/pilinsin/lontan/store/pb"

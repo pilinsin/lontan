@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 
+	"fyne.io/fyne/v2"
 	bimg "github.com/h2non/bimg"
 	pdfapi "github.com/pdfcpu/pdfcpu/pkg/api"
 	proto "google.golang.org/protobuf/proto"
@@ -68,7 +69,7 @@ func encodePdf(filename, tmpname string) ([][]byte, error) {
 	return mImgs, nil
 }
 
-func EncodePdf(name string, r io.Reader) (io.Reader, error) {
+func EncodePdf(r fyne.URIReadCloser) (io.Reader, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -79,7 +80,7 @@ func EncodePdf(name string, r io.Reader) (io.Reader, error) {
 	}
 	defer os.Remove(tmpname)
 
-	mImgs, err := encodePdf(name, tmpname)
+	mImgs, err := encodePdf(r.URI().Name(), tmpname)
 	if err != nil {
 		return nil, err
 	}

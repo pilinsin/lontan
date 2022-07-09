@@ -1,9 +1,10 @@
 package store
 
 import (
-	query "github.com/ipfs/go-datastore/query"
 	"strings"
 	"time"
+
+	query "github.com/ipfs/go-datastore/query"
 )
 
 func sliceToMap(slc []string) map[string]struct{} {

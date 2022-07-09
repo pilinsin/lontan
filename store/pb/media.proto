@@ -16,13 +16,9 @@ message ChunkVideo{
 }
 
 message Audio{
-	repeated string chunkCids	= 1;
-	int64 duration 		  		= 2;
-	int64 sampleRate			= 3;
+	repeated string cids	= 1;
 }
-message ChunkAudio{
-	repeated AudioSample samples	= 1;
-}
+
 
 message ImageRGBA{
 	repeated uint32 pix	= 1;

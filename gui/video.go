@@ -1,5 +1,6 @@
 package gui
 
+/*
 import (
 	"context"
 	"fmt"
@@ -346,3 +347,4 @@ func (vp *videoPlayer) Render() fyne.CanvasObject {
 	info := container.NewBorder(nil, nil, playBtn, nil, vp.timeBar)
 	return container.NewBorder(nil, info, nil, nil, vp.screen)
 }
+*/

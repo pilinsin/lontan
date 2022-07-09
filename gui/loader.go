@@ -3,6 +3,7 @@ package gui
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 
 	"fyne.io/fyne/v2"
@@ -121,17 +122,21 @@ func LoadText(cid string, is ipfs.Ipfs) fyne.CanvasObject {
 
 func LoadAudio(cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	ap, err := NewAudioPlayer(cid, is)
+	fmt.Println("load audio:", err)
 	if err != nil {
 		return errorLabel("load audio error")
 	}
 	return ap.Render()
 }
 func LoadVideo(cid string, is ipfs.Ipfs) fyne.CanvasObject {
-	vp, err := NewVideoPlayer(cid, is)
-	if err != nil {
-		return errorLabel("load video error")
-	}
-	return vp.Render()
+	/*
+		vp, err := NewVideoPlayer(cid, is)
+		if err != nil {
+			return errorLabel("load video error")
+		}
+		return vp.Render()
+	*/
+	return nil
 }
 
 func LoadPdf(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {

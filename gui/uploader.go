@@ -2,7 +2,6 @@ package gui
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"time"
@@ -38,7 +37,7 @@ type iText interface {
 	SetText(string)
 }
 
-func uplpadDialog(w fyne.Window, lable iText, is ipfs.Ipfs, ext string, ch chan *store.TypedData) func() {
+func uplpadDialog(w fyne.Window, lable iText, is ipfs.Ipfs, ext string, ub *uploadBtn) func() {
 	return func() {
 		onSelected := func(rc fyne.URIReadCloser, err error) {
 			if rc == nil || err != nil {
@@ -52,7 +51,7 @@ func uplpadDialog(w fyne.Window, lable iText, is ipfs.Ipfs, ext string, ch chan 
 
 			var r io.Reader
 			if ext == "pdf" {
-				pdf, err := store.EncodePdf(rc.URI().Name(), rc)
+				pdf, err := store.EncodePdf(rc)
 				if err != nil {
 					lable.SetText("invalid pdf is selected")
 					return
@@ -73,7 +72,7 @@ func uplpadDialog(w fyne.Window, lable iText, is ipfs.Ipfs, ext string, ch chan 
 				}
 				r = a
 			} else if ext == "image" {
-				img, err := store.EncodeImage(rc.URI().Name(), rc)
+				img, err := store.EncodeImage(rc)
 				if err != nil {
 					lable.SetText("invalid image is selected")
 					return
@@ -81,10 +80,8 @@ func uplpadDialog(w fyne.Window, lable iText, is ipfs.Ipfs, ext string, ch chan 
 				r = img
 			}
 
-			go func() {
-				ch <- store.NewTypedData(ext, r)
-				lable.SetText(ext + " added")
-			}()
+			ub.td = store.NewTypedData(ext, r)
+			lable.SetText(ext + " added")
 		}
 		dialog.ShowFileOpen(onSelected, w)
 	}
@@ -110,8 +107,8 @@ func NewUploadPage(w fyne.Window, st store.IDocumentStore) fyne.CanvasObject {
 	imgBtn := newDataUploadButton(w, dataObjs, "image", st.Ipfs())
 	pdfBtn := newDataUploadButton(w, dataObjs, "pdf", st.Ipfs())
 	//vdBtn := newDataUploadButton(w, dataObjs, "video", st.Ipfs())
-	//adBtn := newDataUploadButton(w, dataObjs, "audio", st.Ipfs())
-	btns := container.NewHBox(txtBtn, imgBtn, pdfBtn) //, vdBtn, adBtn)
+	adBtn := newDataUploadButton(w, dataObjs, "audio", st.Ipfs())
+	btns := container.NewHBox(txtBtn, imgBtn, pdfBtn, adBtn) //, vdBtn)
 
 	uploadBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
 		noteLabel.SetText("processing...")
@@ -270,36 +267,24 @@ func newTextUploadButton(objs *fyne.Container) fyne.CanvasObject {
 
 type uploadBtn struct {
 	*widget.Button
-	ch chan *store.TypedData
+	td *store.TypedData
 }
 
 func NewUploadButton(w fyne.Window, ext string, is ipfs.Ipfs) iTypedDataExtractor {
-	ch := make(chan *store.TypedData, 1)
+	ub := &uploadBtn{}
+
 	btn := &widget.Button{
 		Text: "add " + ext + " file",
 		Icon: theme.UploadIcon(),
 	}
-	btn.OnTapped = uplpadDialog(w, btn, is, ext, ch)
+	btn.OnTapped = uplpadDialog(w, btn, is, ext, ub)
 
-	ub := &uploadBtn{btn, ch}
+	ub.Button = btn
 	ub.ExtendBaseWidget(ub)
 	return ub
 }
 func (ub *uploadBtn) TypedData() *store.TypedData {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case v, ok := <-ub.ch:
-			if ok {
-				return v
-			} else {
-				return nil
-			}
-		}
-	}
+	return ub.td
 }
 
 func newDataUploadButton(w fyne.Window, objs *fyne.Container, ext string, is ipfs.Ipfs) fyne.CanvasObject {
