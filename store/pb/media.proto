@@ -17,6 +17,7 @@ message ChunkVideo{
 
 message Audio{
 	repeated string cids	= 1;
+	int64 second 			= 2;
 }
 
 

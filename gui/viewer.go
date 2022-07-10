@@ -7,11 +7,12 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	gutil "github.com/pilinsin/lontan/gui/util"
 	store "github.com/pilinsin/lontan/store"
 	ipfs "github.com/pilinsin/p2p-verse/ipfs"
 )
 
-func loadMedia(gui *GUI, tp, cid string, is ipfs.Ipfs) fyne.CanvasObject {
+func loadMedia(gui *GUI, tp, cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {
 	switch tp {
 	case "text":
 		return LoadText(cid, is)
@@ -24,7 +25,7 @@ func loadMedia(gui *GUI, tp, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	case "audio":
 		return LoadAudio(cid, is)
 	default:
-		return errorLabel("invalid cid")
+		return errorLabel("invalid cid"), nil
 	}
 }
 
@@ -53,14 +54,28 @@ func descriptionLabel(text string) fyne.CanvasObject {
 	return lbl
 }
 
-func NewViewerPage(gui *GUI, nmDoc *store.NamedDocument, st store.IDocumentStore) fyne.CanvasObject {
+func NewViewerPage(gui *GUI, nmDoc *store.NamedDocument, st store.IDocumentStore) (fyne.CanvasObject, gutil.Closer) {
 	if nmDoc == nil {
-		return container.NewCenter(widget.NewLabel("no document"))
+		return container.NewCenter(widget.NewLabel("no document")), nil
 	}
 
 	medias := make([]fyne.CanvasObject, len(nmDoc.Cids))
+	closers := make([]gutil.Closer, 0)
 	for idx, cid := range nmDoc.Cids {
-		medias[idx] = loadMedia(gui, cid.Type, cid.Cid, st.Ipfs())
+		media, closer := loadMedia(gui, cid.Type, cid.Cid, st.Ipfs())
+		medias[idx] = media
+		if closer != nil {
+			closers = append(closers, closer)
+		}
+	}
+	closer := func() error {
+		var err error
+		for _, closer := range closers {
+			if closeErr := closer(); closeErr != nil {
+				err = closeErr
+			}
+		}
+		return err
 	}
 
 	name := descriptionLabel(nmDoc.Name)
@@ -74,5 +89,5 @@ func NewViewerPage(gui *GUI, nmDoc *store.NamedDocument, st store.IDocumentStore
 	objs = append(objs, title, name, tm, dTypes, tags, description)
 	objs = append(objs, medias...)
 	page := container.NewVBox(objs...)
-	return container.NewMax(container.NewVScroll(page))
+	return container.NewMax(container.NewVScroll(page)), closer
 }

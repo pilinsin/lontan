@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	gutil "github.com/pilinsin/lontan/gui/util"
 	pb "github.com/pilinsin/lontan/store/pb"
 	ipfs "github.com/pilinsin/p2p-verse/ipfs"
 	proto "google.golang.org/protobuf/proto"
@@ -86,49 +87,49 @@ func withZoom(obj fyne.CanvasObject) fyne.CanvasObject {
 	return page
 }
 
-func LoadImage(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {
+func LoadImage(gui *GUI, cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {
 	r, err := is.GetReader(cid)
 	if err != nil {
-		return errorLabel("load image error (ipfs)")
+		return errorLabel("load image error (ipfs)"), nil
 	}
 
 	img, err := loadImage(r)
 	if err != nil {
-		return errorLabel("load image error")
+		return errorLabel("load image error"), nil
 	}
 	imgCanvas := container.NewGridWrap(fyne.NewSize(400, 400), img)
 	zoomBtn := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() {
 		name := img.(*canvas.Image).Resource.Name()
 		gui.addPageToTabs(name, withZoom(img))
 	})
-	return container.NewBorder(container.NewBorder(nil, nil, zoomBtn, nil), nil, nil, nil, imgCanvas)
+	return container.NewBorder(container.NewBorder(nil, nil, zoomBtn, nil), nil, nil, nil, imgCanvas), nil
 }
 
-func LoadText(cid string, is ipfs.Ipfs) fyne.CanvasObject {
+func LoadText(cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {
 	r, err := is.GetReader(cid)
 	if err != nil {
-		return errorLabel("load text error (ipfs)")
+		return errorLabel("load text error (ipfs)"), nil
 	}
 	buf := &bytes.Buffer{}
 	_, err = buf.ReadFrom(r)
 	if err != nil {
-		return errorLabel("load text error")
+		return errorLabel("load text error"), nil
 	}
 
 	rt := widget.NewRichTextFromMarkdown(buf.String())
 	rt.Wrapping = fyne.TextWrapWord
-	return rt
+	return rt, nil
 }
 
-func LoadAudio(cid string, is ipfs.Ipfs) fyne.CanvasObject {
+func LoadAudio(cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {
 	ap, err := NewAudioPlayer(cid, is)
 	fmt.Println("load audio:", err)
 	if err != nil {
-		return errorLabel("load audio error")
+		return errorLabel("load audio error"), nil
 	}
 	return ap.Render()
 }
-func LoadVideo(cid string, is ipfs.Ipfs) fyne.CanvasObject {
+func LoadVideo(cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {
 	/*
 		vp, err := NewVideoPlayer(cid, is)
 		if err != nil {
@@ -136,18 +137,18 @@ func LoadVideo(cid string, is ipfs.Ipfs) fyne.CanvasObject {
 		}
 		return vp.Render()
 	*/
-	return nil
+	return nil, nil
 }
 
-func LoadPdf(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {
+func LoadPdf(gui *GUI, cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {
 	m, err := is.Get(cid)
 	if err != nil {
-		return errorLabel("load pdf error (ipfs)")
+		return errorLabel("load pdf error (ipfs)"), nil
 	}
 
 	pbPdf := &pb.Pdf{}
 	if err := proto.Unmarshal(m, pbPdf); err != nil {
-		return errorLabel("load pdf error")
+		return errorLabel("load pdf error"), nil
 	}
 
 	mImgs := pbPdf.GetImages()
@@ -156,13 +157,13 @@ func LoadPdf(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 	for idx, mImg := range mImgs {
 		imgCanvas, err := loadImage(bytes.NewBuffer(mImg))
 		if err != nil {
-			return errorLabel("load pdf error")
+			return errorLabel("load pdf error"), nil
 		}
 		imgCanvases[idx] = container.NewGridWrap(fyne.NewSize(400, 400), imgCanvas)
 		zoomImgs[idx] = withZoom(imgCanvas)
 	}
 	if len(imgCanvases) == 0 {
-		return errorLabel("load pdf error")
+		return errorLabel("load pdf error"), nil
 	}
 
 	player := NewPdfPlayer(imgCanvases...)
@@ -171,5 +172,5 @@ func LoadPdf(gui *GUI, cid string, is ipfs.Ipfs) fyne.CanvasObject {
 		name := zoomImgs[0].(*fyne.Container).Objects[0].(*canvas.Image).Resource.Name()
 		gui.addPageToTabs(name, zoomPlayer.Render())
 	})
-	return container.NewBorder(container.NewBorder(nil, nil, zoomBtn, nil), nil, nil, nil, player.Render())
+	return container.NewBorder(container.NewBorder(nil, nil, zoomBtn, nil), nil, nil, nil, player.Render()), nil
 }

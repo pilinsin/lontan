@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	i2p "github.com/pilinsin/go-libp2p-i2p"
+	gutil "github.com/pilinsin/lontan/gui/util"
 	store "github.com/pilinsin/lontan/store"
 	pv "github.com/pilinsin/p2p-verse"
 )
@@ -51,14 +52,17 @@ func New(title string, width, height float32) *GUI {
 	return &GUI{rt, stores, bs, win, size, tabs, page}
 }
 
-func (gui *GUI) withRemove(page fyne.CanvasObject) fyne.CanvasObject {
+func (gui *GUI) withRemove(page fyne.CanvasObject, closers ...gutil.Closer) fyne.CanvasObject {
 	rmvBtn := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
+		for _, closer := range closers {
+			closer()
+		}
 		gui.tabs.Remove(gui.tabs.Selected())
 	})
 	return container.NewBorder(container.NewBorder(nil, nil, nil, rmvBtn), nil, nil, nil, page)
 }
-func (gui *GUI) addPageToTabs(title string, page fyne.CanvasObject) {
-	withRmvPage := gui.withRemove(page)
+func (gui *GUI) addPageToTabs(title string, page fyne.CanvasObject, closers ...gutil.Closer) {
+	withRmvPage := gui.withRemove(page, closers...)
 	withRmvTab := pageToTabItem(title, withRmvPage)
 	gui.tabs.Append(withRmvTab)
 	gui.tabs.Select(withRmvTab)
