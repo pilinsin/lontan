@@ -164,7 +164,6 @@ func (dec *multiChunkDecoder) loadAt() ([]byte, error) {
 	if err == io.ErrUnexpectedEOF {
 		err = nil
 	}
-	fmt.Println(err)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
@@ -238,15 +237,26 @@ func newOtoPlayer(dec *multiChunkDecoder) (oto.Player, error) {
 	return otoCtx.NewPlayer(dec), nil
 }
 
+func durationToDisplay(d int) string {
+	h := d / 3600
+	d %= 3600
+	m := d / 60
+	s := d % 60
+
+	if h == 0 {
+		return fmt.Sprintf("%02d:%02d", m, s)
+	}
+	return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+}
+
 type audioPlayer struct {
 	ctx    context.Context
 	cancel func()
 
-	cid     string
-	length  int64
-	is      ipfs.Ipfs
-	decoder *multiChunkDecoder
-	player  oto.Player
+	cid    string
+	length int
+	is     ipfs.Ipfs
+	player oto.Player
 }
 
 func NewAudioPlayer(cid string, is ipfs.Ipfs) (*audioPlayer, error) {
@@ -269,13 +279,12 @@ func (ap *audioPlayer) newPlayer() error {
 	if err := proto.Unmarshal(m, pbAudio); err != nil {
 		return err
 	}
-	ap.length = pbAudio.GetSecond()
+	ap.length = int(pbAudio.GetSecond())
 
 	dec, err := newMultiChunkDecoder(pbAudio.GetCids(), ap.is)
 	if err != nil {
 		return err
 	}
-	ap.decoder = dec
 
 	player, err := newOtoPlayer(dec)
 	if err != nil {
@@ -302,6 +311,9 @@ func (ap *audioPlayer) Close() error {
 }
 
 func (ap *audioPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
+	totalTime := durationToDisplay(ap.length)
+	timeLabel := widget.NewLabel("00:00/" + totalTime)
+
 	var playBtn *widget.Button
 	playBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
 		if ap.player.IsPlaying() {
@@ -314,13 +326,23 @@ func (ap *audioPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
 	})
 
 	slider := widget.NewSlider(0, float64(ap.length))
+	lastValue := slider.Value
+	//future update supports Seek
 	slider.OnChanged = func(v float64) {
-		idx := int(v) / 10
-		slider.Value = float64(idx * 10)
-		ap.player.Pause()
-		ap.decoder.Seek(int64(idx), io.SeekStart)
-		ap.player.Play()
+		slider.Value = lastValue
+		slider.Refresh()
+		/*
+			idx := int(v) / 10
+			slider.Value = float64(idx * 10)
+			ap.player.Pause()
+			ap.player.Seek(int64(idx), io.SeekStart)
+			ap.player.Play()
+
+			nowTime := durationToDisplay(int(slider.Value))
+			timeLabel.SetText(nowTime + "/" + totalTime)
+		*/
 	}
+
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
@@ -332,7 +354,11 @@ func (ap *audioPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
 				if ap.player.IsPlaying() {
 					if slider.Value <= slider.Max-1 {
 						slider.Value += 1
+						lastValue = slider.Value
 						slider.Refresh()
+
+						nowTime := durationToDisplay(int(slider.Value))
+						timeLabel.SetText(nowTime + "/" + totalTime)
 					}
 				}
 			}
@@ -346,8 +372,10 @@ func (ap *audioPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
 		playBtn.SetIcon(theme.MediaPlayIcon())
 		slider.Value = 0
 		slider.Refresh()
+
+		timeLabel.SetText("00:00/ " + totalTime)
 	})
 
 	btns := container.NewHBox(playBtn, resetBtn)
-	return container.NewBorder(nil, nil, btns, nil, slider), ap.Close
+	return container.NewBorder(nil, nil, btns, timeLabel, slider), ap.Close
 }

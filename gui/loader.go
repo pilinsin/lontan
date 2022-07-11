@@ -3,7 +3,6 @@ package gui
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 
 	"fyne.io/fyne/v2"
@@ -123,7 +122,6 @@ func LoadText(cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {
 
 func LoadAudio(cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {
 	ap, err := NewAudioPlayer(cid, is)
-	fmt.Println("load audio:", err)
 	if err != nil {
 		return errorLabel("load audio error"), nil
 	}
