@@ -4,40 +4,15 @@ option go_package = ".;pb";
 
 
 message Video{
-	repeated string chunkCids	= 1;
-	int64 duration 		  		= 2;
-	int64 frameRate				= 3;
-	int64 sampleRate			= 4;
+	bytes 	audio		= 1;
+	bytes 	video		= 2;
+	double	frameRate	= 3;
+	int64	frameCount	= 4;
+	double	second		= 5;
 }
 
-message ChunkVideo{
-	repeated ImageRGBA 	 frames 	= 1;
-	repeated AudioSample samples	= 2;
-}
 
 message Audio{
-	repeated string cids	= 1;
-	int64 second 			= 2;
-}
-
-
-message ImageRGBA{
-	repeated uint32 pix	= 1;
-	int64 stride 		= 2;
-	Rectangle rect		= 3;
-}
-
-message Rectangle{
-	Point min 	= 1;
-	Point max	= 2;
-}
-
-message Point{
-	int64 x 	= 1;
-	int64 y 	= 2;
-}
-
-message AudioSample{
-	double left  = 1;
-	double right = 2;
+	bytes	 data 		= 1;
+	double	 second 	= 2;
 }

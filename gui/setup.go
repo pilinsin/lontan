@@ -52,55 +52,58 @@ func (gui *GUI) NewSetupPage() fyne.CanvasObject {
 
 func newBootstrap(gui *GUI, lbl *gutil.CopyButton, form *bootstrapsForm) func() {
 	return func() {
-		lbl.SetText("processing...")
+		go func() {
+			lbl.SetText("processing...")
 
-		bsKey := "setup"
-		if _, exist := gui.bs[bsKey]; exist {
-			gui.bs[bsKey].Close()
-			gui.bs[bsKey] = nil
-		}
+			bsKey := "setup"
+			if _, exist := gui.bs[bsKey]; exist {
+				gui.bs[bsKey].Close()
+				gui.bs[bsKey] = nil
+			}
 
-		b, err := pv.NewBootstrap(i2p.NewI2pHost, form.AddrInfos()...)
-		if err != nil {
-			lbl.SetText("bootstrap list address")
-			return
-		}
+			b, err := pv.NewBootstrap(i2p.NewI2pHost, form.AddrInfos()...)
+			if err != nil {
+				lbl.SetText("bootstrap list address")
+				return
+			}
 
-		baddrs := append(b.ConnectedPeers(), b.AddrInfo())
-		s := pv.AddrInfosToString(baddrs...)
-		if s == "" {
-			lbl.SetText("bootstrap list address")
-		} else {
-			gui.bs[bsKey] = b
-			lbl.SetText(s)
-		}
+			baddrs := append(b.ConnectedPeers(), b.AddrInfo())
+			s := pv.AddrInfosToString(baddrs...)
+			if s == "" {
+				lbl.SetText("bootstrap list address")
+			} else {
+				gui.bs[bsKey] = b
+				lbl.SetText(s)
+			}
+		}()
 	}
 }
 
 func newStore(gui *GUI, te *widget.Entry, bLabel, stLabel *gutil.CopyButton) func() {
 	return func() {
-		if bLabel.GetText() == "bootstrap list address" {
-			return
-		}
+		go func() {
+			if bLabel.GetText() == "bootstrap list address" {
+				return
+			}
 
-		stLabel.SetText("processing...")
-		storesKey := "setup"
-		if _, exist := gui.stores[storesKey]; exist {
-			gui.stores[storesKey].Close()
-			gui.stores[storesKey] = nil
-		}
+			stLabel.SetText("processing...")
+			storesKey := "setup"
+			if _, exist := gui.stores[storesKey]; exist {
+				gui.stores[storesKey].Close()
+				gui.stores[storesKey] = nil
+			}
 
-		baseDir := store.BaseDir(filepath.Join("stores", storesKey))
-		st, err := store.NewDocumentStore(te.Text, bLabel.GetText(), baseDir)
-		if err != nil {
-			stLabel.SetText("document store address")
-		} else {
-			gui.stores[storesKey] = st
-			addrs := strings.Split(st.Address(), "/")
-			addr := strings.Join(addrs[1:], "/")
-			stLabel.SetText(addr)
-		}
-
+			baseDir := store.BaseDir(filepath.Join("stores", storesKey))
+			st, err := store.NewDocumentStore(te.Text, bLabel.GetText(), baseDir)
+			if err != nil {
+				stLabel.SetText("document store address")
+			} else {
+				gui.stores[storesKey] = st
+				addrs := strings.Split(st.Address(), "/")
+				addr := strings.Join(addrs[1:], "/")
+				stLabel.SetText(addr)
+			}
+		}()
 	}
 }
 

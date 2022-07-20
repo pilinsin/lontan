@@ -17,14 +17,6 @@ import (
 	ipfs "github.com/pilinsin/p2p-verse/ipfs"
 )
 
-var exts = map[string]struct{}{
-	"text":  {},
-	"image": {},
-	"pdf":   {},
-	"video": {},
-	"audio": {},
-}
-
 func sliceToMap(slc []string) map[string]struct{} {
 	mp := make(map[string]struct{}, len(slc))
 	for _, elem := range slc {
@@ -37,51 +29,38 @@ type iText interface {
 	SetText(string)
 }
 
-func uplpadDialog(w fyne.Window, lable iText, is ipfs.Ipfs, ext string, ub *uploadBtn) func() {
+func uplpadDialog(w fyne.Window, label iText, is ipfs.Ipfs, ext string, ub *uploadBtn) func() {
 	return func() {
 		onSelected := func(rc fyne.URIReadCloser, err error) {
 			if rc == nil || err != nil {
-				lable.SetText("no file is selected")
-				return
-			}
-			if _, ok := exts[ext]; !ok {
-				lable.SetText("invalid file is selected")
+				label.SetText("no file is selected")
 				return
 			}
 
-			var r io.Reader
-			if ext == "pdf" {
-				pdf, err := store.EncodePdf(rc)
+			go func() {
+				label.SetText("encoding...")
+				var r io.Reader
+				switch ext {
+				default:
+					label.SetText("invalid file is selected")
+					return
+				case "pdf":
+					r, err = store.EncodePdf(rc)
+				case "video":
+					r, err = store.EncodeVideo(rc)
+				case "audio":
+					r, err = store.EncodeAudio(rc)
+				case "image":
+					r, err = store.EncodeImage(rc)
+				}
 				if err != nil {
-					lable.SetText("invalid pdf is selected")
+					label.SetText("invalid " + ext + " is selected")
 					return
 				}
-				r = pdf
-			} else if ext == "video" {
-				v, err := store.EncodeVideo(rc, is)
-				if err != nil {
-					lable.SetText("invalid video is selected")
-					return
-				}
-				r = v
-			} else if ext == "audio" {
-				a, err := store.EncodeAudio(rc, is)
-				if err != nil {
-					lable.SetText("invalid audio is selected")
-					return
-				}
-				r = a
-			} else if ext == "image" {
-				img, err := store.EncodeImage(rc)
-				if err != nil {
-					lable.SetText("invalid image is selected")
-					return
-				}
-				r = img
-			}
 
-			ub.td = store.NewTypedData(ext, r)
-			lable.SetText(ext + " added")
+				ub.td = store.NewTypedData(ext, r)
+				label.SetText(ext + " added")
+			}()
 		}
 		dialog.ShowFileOpen(onSelected, w)
 	}
@@ -106,24 +85,30 @@ func NewUploadPage(w fyne.Window, st store.IDocumentStore) fyne.CanvasObject {
 	txtBtn := newTextUploadButton(dataObjs)
 	imgBtn := newDataUploadButton(w, dataObjs, "image", st.Ipfs())
 	pdfBtn := newDataUploadButton(w, dataObjs, "pdf", st.Ipfs())
-	//vdBtn := newDataUploadButton(w, dataObjs, "video", st.Ipfs())
+	vdBtn := newDataUploadButton(w, dataObjs, "video", st.Ipfs())
 	adBtn := newDataUploadButton(w, dataObjs, "audio", st.Ipfs())
-	btns := container.NewHBox(txtBtn, imgBtn, pdfBtn, adBtn) //, vdBtn)
+	btns := container.NewHBox(txtBtn, imgBtn, pdfBtn, vdBtn, adBtn) //, vdBtn)
 
 	uploadBtn := widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
 		noteLabel.SetText("processing...")
+		if ok := isValidDocumentInfo(title.Text, description.Text); !ok {
+			noteLabel.SetText("title or description are empty")
+			return
+		}
 
 		tds := make([]*store.TypedData, 0)
 		docTypes := make([]string, 0)
 		for _, obj := range dataObjs.Objects {
 			tdExtractor, ok := extractorFromRemoveBtn(obj)
 			if !ok {
-				continue
+				noteLabel.SetText("invalid media exists")
+				return
 			}
 
 			td := tdExtractor.TypedData()
 			if td == nil || td.Data() == nil {
-				continue
+				noteLabel.SetText("invalid media exists")
+				return
 			}
 			tds = append(tds, td)
 			docTypes = append(docTypes, td.Type())
@@ -150,6 +135,10 @@ func NewUploadPage(w fyne.Window, st store.IDocumentStore) fyne.CanvasObject {
 	upBtnLabel := container.NewBorder(nil, nil, uploadBtn, nil, noteLabel)
 	page := container.NewVBox(ui, name, title, description, tags.Render(), btns, dataObjs, upBtnLabel)
 	return container.NewMax(container.NewVScroll(page))
+}
+
+func isValidDocumentInfo(title, desc string) bool {
+	return title != "" && desc != ""
 }
 
 func withRemoveBtn(objs *fyne.Container, obj fyne.CanvasObject) fyne.CanvasObject {

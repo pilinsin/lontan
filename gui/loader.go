@@ -128,14 +128,11 @@ func LoadAudio(cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {
 	return ap.Render()
 }
 func LoadVideo(cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {
-	/*
-		vp, err := NewVideoPlayer(cid, is)
-		if err != nil {
-			return errorLabel("load video error")
-		}
-		return vp.Render()
-	*/
-	return nil, nil
+	vp, err := NewVideoPlayer(cid, is)
+	if err != nil {
+		return errorLabel("load video error"), nil
+	}
+	return vp.Render()
 }
 
 func LoadPdf(gui *GUI, cid string, is ipfs.Ipfs) (fyne.CanvasObject, gutil.Closer) {

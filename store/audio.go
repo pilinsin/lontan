@@ -12,53 +12,55 @@ import (
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 
 	pb "github.com/pilinsin/lontan/store/pb"
-	ipfs "github.com/pilinsin/p2p-verse/ipfs"
 	proto "google.golang.org/protobuf/proto"
 )
 
-func EncodeAudio(r fyne.URIReadCloser, is ipfs.Ipfs) (io.Reader, error) {
-	tmpDir, err := os.MkdirTemp("", "audio_convert")
+func encodeAudio(r fyne.URIReadCloser) (string, error) {
+	fileName := strings.TrimSuffix(r.URI().Name(), r.URI().Extension())
+	f, err := os.CreateTemp("", fileName+"_tmp_convert*.mp3")
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	outName := filepath.Join(tmpDir, strings.TrimSuffix(r.URI().Name(), r.URI().Extension()))
-	outSuffix := "%03d.mp3"
+	f.Close()
+	outName := BaseDir(filepath.Base(f.Name()))
+
 	strm := ffmpeg.Input(r.URI().Path()).Audio().
-		Output(outName+outSuffix, ffmpeg.KwArgs{"c:a": "mp3", "f": "segment", "segment_time": 10})
-	err = strm.OverWriteOutput().Run()
+		Output(outName, ffmpeg.KwArgs{
+			"c:a": "mp3",
+			"ac":  2,
+			"ar":  44100,
+		})
+	if err := strm.OverWriteOutput().Run(); err != nil {
+		return "", err
+	}
+
+	return outName, nil
+}
+func EncodeAudio(r fyne.URIReadCloser) (io.Reader, error) {
+	encodedName, err := encodeAudio(r)
+	defer os.Remove(encodedName)
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(tmpDir)
 
-	files, err := os.ReadDir(tmpDir)
+	f, err := os.Open(encodedName)
 	if err != nil {
 		return nil, err
 	}
-	cids := make([]string, len(files))
-	var second int64
-	for idx, file := range files {
-		f, err := os.Open(filepath.Join(tmpDir, file.Name()))
-		if err != nil {
-			return nil, err
-		}
-		defer f.Close()
+	defer f.Close()
+	mp3Dec, err := mp3.NewDecoder(f)
+	if err != nil {
+		return nil, err
+	}
+	second := float64(mp3Dec.Length()) / float64((mp3Dec.SampleRate())*4)
 
-		mp3Dec, err := mp3.NewDecoder(f)
-		if err != nil {
-			return nil, err
-		}
-		second += mp3Dec.Length() / (int64(mp3Dec.SampleRate()) * 4)
-
-		cid, err := is.AddReader(f)
-		if err != nil {
-			return nil, err
-		}
-		cids[idx] = cid
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
 	}
 
 	pbAudio := &pb.Audio{
-		Cids:   cids,
+		Data:   data,
 		Second: second,
 	}
 	m, err := proto.Marshal(pbAudio)

@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -21,242 +22,100 @@ import (
 	proto "google.golang.org/protobuf/proto"
 )
 
-type multiChunkDecoder struct {
-	is         ipfs.Ipfs
-	cids       []string
-	loadIdx    int
-	bufSize    int
-	ch         chan chan byte
+type audioDecoder struct {
+	*mp3.Decoder
+	readIdx int64
+}
+
+func newAudioDecoder(aData []byte) (*audioDecoder, error) {
+	mp3Dec, err := mp3.NewDecoder(bytes.NewReader(aData))
+	if err != nil {
+		return nil, err
+	}
+
+	return &audioDecoder{
+		Decoder: mp3Dec,
+	}, nil
+}
+func (dec *audioDecoder) Read(buf []byte) (int, error) {
+	n, err := dec.Decoder.Read(buf)
+	if err != nil {
+		return -1, err
+	}
+	dec.readIdx += int64(n)
+	return n, nil
+}
+func (dec *audioDecoder) Seek(offset int64, whence int) (int64, error) {
+	ofst, err := dec.Decoder.Seek(offset, whence)
+	if err != nil {
+		return -1, err
+	}
+
+	dec.readIdx = ofst
+	return ofst, nil
+
+}
+
+type iAudioPlayer interface {
+	gutil.IPlayer
+}
+type otoPlayer struct {
+	oto.Player
+	src        *audioDecoder
 	sampleRate int
-
-	playIdx    int
-	playBuffer chan byte
-}
-
-func newMultiChunkDecoder(cids []string, is ipfs.Ipfs) (*multiChunkDecoder, error) {
-	if len(cids) == 0 {
-		return nil, errors.New("no data input")
-	}
-
-	dec := &multiChunkDecoder{
-		is:      is,
-		cids:    cids,
-		playIdx: -1,
-	}
-	r, err := is.GetReader(cids[0])
-	if err != nil {
-		return nil, err
-	}
-
-	mp3Dec, err := mp3.NewDecoder(r)
-	if err != nil {
-		return nil, err
-	}
-	dec.sampleRate = mp3Dec.SampleRate()
-
-	//bufSize := sampleRate * nChannels(2) * bitDepth(2) * sec(10) + alpha
-	dec.bufSize = dec.sampleRate * 50
-	dec.ch = make(chan chan byte, 4)
-	dec.playBuffer = make(chan byte, dec.bufSize*2)
-	dec.initLoad()
-
-	return dec, nil
-}
-
-func (dec *multiChunkDecoder) initLoad() error {
-	for {
-		if len(dec.ch) > 2 {
-			return nil
-		}
-
-		ch := make(chan byte, dec.bufSize)
-		dec.ch <- ch
-
-		var buf []byte
-		var err error
-		for {
-			if dec.isFullyLoaded() {
-				return nil
-			}
-			buf, err = dec.loadAt()
-			if err == nil {
-				break
-			}
-			if err != io.EOF {
-				return err
-			}
-		}
-
-		if len(buf) > 0 {
-			for _, b := range buf {
-				ch <- b
-			}
-		}
-		close(ch)
-
-		if dec.isFullyLoaded() {
-			close(dec.ch)
-			return nil
-		}
-	}
-}
-func (dec *multiChunkDecoder) isFullyLoaded() bool {
-	return dec.loadIdx >= len(dec.cids)
-}
-func (dec *multiChunkDecoder) Load() {
-	if dec.isFullyLoaded() {
-		return
-	}
-
-	go func() {
-		if len(dec.ch) < 3 {
-			ch := make(chan byte, dec.bufSize)
-			dec.ch <- ch
-
-			var buf []byte
-			var err error
-			for {
-				if dec.isFullyLoaded() {
-					return
-				}
-
-				buf, err = dec.loadAt()
-				if err == nil {
-					break
-				}
-				if err != io.EOF {
-					return
-				}
-			}
-
-			if len(buf) > 0 {
-				for _, b := range buf {
-					ch <- b
-				}
-			}
-			close(ch)
-
-			if dec.isFullyLoaded() {
-				close(dec.ch)
-			}
-		}
-	}()
-}
-func (dec *multiChunkDecoder) loadAt() ([]byte, error) {
-	if dec.loadIdx < 0 {
-		return nil, errors.New("invalid idx")
-	}
-	if dec.isFullyLoaded() {
-		return nil, nil
-	}
-
-	r, err := dec.is.GetReader(dec.cids[dec.loadIdx])
-	if err != nil {
-		return nil, err
-	}
-	mp3Dec, err := mp3.NewDecoder(r)
-	if err != nil {
-		return nil, err
-	}
-
-	buf := make([]byte, dec.bufSize)
-	n, err := io.ReadFull(mp3Dec, buf)
-	if err == io.ErrUnexpectedEOF {
-		err = nil
-	}
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-
-	dec.loadIdx++
-	return buf[:n], err
-}
-
-func (dec *multiChunkDecoder) readPlayBufferFromChan() error {
-	var ok bool
-	if dec.playBuffer == nil || len(dec.playBuffer) == 0 {
-		dec.playBuffer, ok = <-dec.ch
-		if !ok {
-			return io.EOF
-		}
-
-		dec.playIdx++
-	}
-	return nil
-}
-func (dec *multiChunkDecoder) Read(buf []byte) (int, error) {
-	for idx := 0; idx < len(buf); idx++ {
-		if err := dec.readPlayBufferFromChan(); err != nil {
-			return idx, err
-		}
-
-		val, ok := <-dec.playBuffer
-		if !ok {
-			return idx, io.EOF
-		}
-		buf[idx] = val
-	}
-
-	dec.Load()
-	return len(buf), nil
-}
-func (dec *multiChunkDecoder) Seek(offset int64, whence int) (int64, error) {
-	ofst := int(offset)
-	if ofst < 0 || ofst >= len(dec.cids) {
-		return -1, errors.New("invalid offset")
-	}
-	switch whence {
-	case io.SeekCurrent:
-		ofst += dec.playIdx
-	case io.SeekEnd:
-		ofst = len(dec.cids) - ofst
-	default:
-		//io.SeekStart
-	}
-
-	if dec.loadIdx < len(dec.cids) {
-		close(dec.ch)
-	}
-
-	dec.playIdx = ofst - 2
-	dec.loadIdx = ofst - 1
-	dec.ch = make(chan chan byte, 4)
-	dec.initLoad()
-
-	return int64(ofst), nil
 }
 
 //single r can be used by only single Player
-func newOtoPlayer(dec *multiChunkDecoder) (oto.Player, error) {
-	otoCtx, readyChan, err := oto.NewContext(dec.sampleRate, 2, 2)
+func newOtoPlayer(dec *audioDecoder) (*otoPlayer, error) {
+	otoCtx, readyChan, err := oto.NewContext(dec.SampleRate(), 2, 2)
 	if err != nil {
 		return nil, err
 	}
 	<-readyChan
 
-	return otoCtx.NewPlayer(dec), nil
+	player := otoCtx.NewPlayer(dec)
+	player.(oto.BufferSizeSetter).SetBufferSize(dec.SampleRate() * 20)
+	return &otoPlayer{
+		Player:     player,
+		src:        dec,
+		sampleRate: dec.SampleRate(),
+	}, nil
 }
-
-func durationToDisplay(d int) string {
-	h := d / 3600
-	d %= 3600
-	m := d / 60
-	s := d % 60
-
-	if h == 0 {
-		return fmt.Sprintf("%02d:%02d", m, s)
+func (op *otoPlayer) IsPausing() bool {
+	return !op.IsPlaying()
+}
+func (op *otoPlayer) PlayedTime() (time.Duration, error) {
+	playedSize := (op.src.readIdx + 1) - int64(op.UnplayedBufferSize())
+	d := float64(playedSize) / (float64(op.sampleRate) * 4)
+	return time.ParseDuration(fmt.Sprintf("%vs", d))
+}
+func (op *otoPlayer) Wait(d time.Duration) {
+	if d == 0 {
+		return
 	}
-	return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+
+	op.Pause()
+	time.Sleep(d)
+	op.Play()
+}
+func (op *otoPlayer) Seek(offset int64, whence int) (int64, error) {
+	seeker, ok := op.Player.(io.Seeker)
+	if !ok {
+		return -1, errors.New("io.Seeker is not implemented")
+	}
+
+	return seeker.Seek(offset, whence)
 }
 
 type audioPlayer struct {
 	ctx    context.Context
 	cancel func()
 
-	cid    string
-	length int
-	is     ipfs.Ipfs
-	player oto.Player
+	cid string
+	is  ipfs.Ipfs
+
+	player  iAudioPlayer
+	timeBar gutil.ITimeBar
 }
 
 func NewAudioPlayer(cid string, is ipfs.Ipfs) (*audioPlayer, error) {
@@ -270,7 +129,7 @@ func NewAudioPlayer(cid string, is ipfs.Ipfs) (*audioPlayer, error) {
 
 	return ap, nil
 }
-func (ap *audioPlayer) newPlayer() error {
+func (ap *audioPlayer) init() error {
 	m, err := ap.is.Get(ap.cid)
 	if err != nil {
 		return err
@@ -279,25 +138,18 @@ func (ap *audioPlayer) newPlayer() error {
 	if err := proto.Unmarshal(m, pbAudio); err != nil {
 		return err
 	}
-	ap.length = int(pbAudio.GetSecond())
 
-	dec, err := newMultiChunkDecoder(pbAudio.GetCids(), ap.is)
+	dec, err := newAudioDecoder(pbAudio.GetData())
 	if err != nil {
 		return err
 	}
-
 	player, err := newOtoPlayer(dec)
 	if err != nil {
 		return err
 	}
 	ap.player = player
 
-	return nil
-}
-func (ap *audioPlayer) init() error {
-	if err := ap.newPlayer(); err != nil {
-		return err
-	}
+	ap.timeBar = gutil.NewTimeBar(pbAudio.GetSecond())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ap.ctx = ctx
@@ -306,76 +158,73 @@ func (ap *audioPlayer) init() error {
 	return nil
 }
 func (ap *audioPlayer) Close() error {
+	ap.player.Pause()
+	ap.timeBar.Pause()
+
 	ap.cancel()
-	return ap.player.Close()
+	err1 := ap.player.Close()
+	err2 := ap.timeBar.Close()
+	if err1 != nil {
+		return err1
+	} else {
+		return err2
+	}
 }
 
-func (ap *audioPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
-	totalTime := durationToDisplay(ap.length)
-	timeLabel := widget.NewLabel("00:00/" + totalTime)
-
-	var playBtn *widget.Button
-	playBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
-		if ap.player.IsPlaying() {
-			ap.player.Pause()
-			playBtn.SetIcon(theme.MediaPlayIcon())
-		} else {
-			ap.player.Play()
-			playBtn.SetIcon(theme.MediaPauseIcon())
-		}
-	})
-
-	slider := widget.NewSlider(0, float64(ap.length))
-	lastValue := slider.Value
-	//future update supports Seek
-	slider.OnChanged = func(v float64) {
-		slider.Value = lastValue
-		slider.Refresh()
-		/*
-			idx := int(v) / 10
-			slider.Value = float64(idx * 10)
-			ap.player.Pause()
-			ap.player.Seek(int64(idx), io.SeekStart)
-			ap.player.Play()
-
-			nowTime := durationToDisplay(int(slider.Value))
-			timeLabel.SetText(nowTime + "/" + totalTime)
-		*/
-	}
-
+func (ap *audioPlayer) SyncTime() {
 	go func() {
-		ticker := time.NewTicker(time.Second)
+		ticker := time.NewTicker(time.Second * 30)
 		defer ticker.Stop()
+
 		for {
 			select {
 			case <-ap.ctx.Done():
 				return
 			case <-ticker.C:
-				if ap.player.IsPlaying() {
-					if slider.Value <= slider.Max-1 {
-						slider.Value += 1
-						lastValue = slider.Value
-						slider.Refresh()
-
-						nowTime := durationToDisplay(int(slider.Value))
-						timeLabel.SetText(nowTime + "/" + totalTime)
-					}
+				aPlaying := ap.player.IsPlaying()
+				tPlaying := ap.timeBar.IsPlaying()
+				if !aPlaying || !tPlaying {
+					continue
 				}
+
+				aTime, err1 := ap.player.PlayedTime()
+				tTime, err2 := ap.timeBar.PlayedTime()
+				if err1 != nil || err2 != nil {
+					return
+				}
+				min := gutil.MinTime(aTime, tTime)
+				ap.player.Wait(aTime - min)
+				ap.timeBar.Wait(tTime - min)
 			}
 		}
+
 	}()
+}
+
+func (ap *audioPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
+	var playBtn *widget.Button
+	playBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
+		if ap.player.IsPlaying() {
+			ap.player.Pause()
+			ap.timeBar.Pause()
+			playBtn.SetIcon(theme.MediaPlayIcon())
+		} else {
+			ap.player.Play()
+			ap.timeBar.Play()
+			playBtn.SetIcon(theme.MediaPauseIcon())
+		}
+	})
 
 	resetBtn := widget.NewButtonWithIcon("", theme.MediaSkipPreviousIcon(), func() {
 		ap.player.Pause()
-		ap.player.Close()
-		ap.newPlayer()
-		playBtn.SetIcon(theme.MediaPlayIcon())
-		slider.Value = 0
-		slider.Refresh()
+		ap.timeBar.Pause()
 
-		timeLabel.SetText("00:00/ " + totalTime)
+		ap.Close()
+		ap.init()
+		playBtn.SetIcon(theme.MediaPlayIcon())
 	})
 
+	ap.SyncTime()
 	btns := container.NewHBox(playBtn, resetBtn)
-	return container.NewBorder(nil, nil, btns, timeLabel, slider), ap.Close
+	return ap.timeBar.Render(btns), ap.Close
 }
