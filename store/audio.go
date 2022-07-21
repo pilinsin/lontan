@@ -15,6 +15,14 @@ import (
 	proto "google.golang.org/protobuf/proto"
 )
 
+const (
+	NumChannel     = 2
+	ByteDepth      = 2
+	BytesPerSample = NumChannel * ByteDepth
+	SampleRate     = 44100
+	ByteRate       = SampleRate * BytesPerSample
+)
+
 func encodeAudio(r fyne.URIReadCloser) (string, error) {
 	fileName := strings.TrimSuffix(r.URI().Name(), r.URI().Extension())
 	f, err := os.CreateTemp("", fileName+"_tmp_convert*.mp3")
@@ -27,8 +35,8 @@ func encodeAudio(r fyne.URIReadCloser) (string, error) {
 	strm := ffmpeg.Input(r.URI().Path()).Audio().
 		Output(outName, ffmpeg.KwArgs{
 			"c:a": "mp3",
-			"ac":  2,
-			"ar":  44100,
+			"ac":  NumChannel,
+			"ar":  SampleRate,
 		})
 	if err := strm.OverWriteOutput().Run(); err != nil {
 		return "", err

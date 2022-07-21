@@ -17,10 +17,19 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	gutil "github.com/pilinsin/lontan/gui/util"
+	store "github.com/pilinsin/lontan/store"
 	pb "github.com/pilinsin/lontan/store/pb"
 	ipfs "github.com/pilinsin/p2p-verse/ipfs"
 	proto "google.golang.org/protobuf/proto"
 )
+
+var otoCtx *oto.Context
+
+func init() {
+	ctx, readyChan, _ := oto.NewContext(store.SampleRate, store.NumChannel, store.ByteDepth)
+	<-readyChan
+	otoCtx = ctx
+}
 
 type audioDecoder struct {
 	*mp3.Decoder
@@ -40,7 +49,7 @@ func newAudioDecoder(aData []byte) (*audioDecoder, error) {
 func (dec *audioDecoder) Read(buf []byte) (int, error) {
 	n, err := dec.Decoder.Read(buf)
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
 	dec.readIdx += int64(n)
 	return n, nil
@@ -48,7 +57,7 @@ func (dec *audioDecoder) Read(buf []byte) (int, error) {
 func (dec *audioDecoder) Seek(offset int64, whence int) (int64, error) {
 	ofst, err := dec.Decoder.Seek(offset, whence)
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
 
 	dec.readIdx = ofst
@@ -61,24 +70,16 @@ type iAudioPlayer interface {
 }
 type otoPlayer struct {
 	oto.Player
-	src        *audioDecoder
-	sampleRate int
+	src *audioDecoder
 }
 
 //single r can be used by only single Player
 func newOtoPlayer(dec *audioDecoder) (*otoPlayer, error) {
-	otoCtx, readyChan, err := oto.NewContext(dec.SampleRate(), 2, 2)
-	if err != nil {
-		return nil, err
-	}
-	<-readyChan
-
 	player := otoCtx.NewPlayer(dec)
-	player.(oto.BufferSizeSetter).SetBufferSize(dec.SampleRate() * 20)
+	player.(oto.BufferSizeSetter).SetBufferSize(store.ByteRate * 5)
 	return &otoPlayer{
-		Player:     player,
-		src:        dec,
-		sampleRate: dec.SampleRate(),
+		Player: player,
+		src:    dec,
 	}, nil
 }
 func (op *otoPlayer) IsPausing() bool {
@@ -86,7 +87,7 @@ func (op *otoPlayer) IsPausing() bool {
 }
 func (op *otoPlayer) PlayedTime() (time.Duration, error) {
 	playedSize := (op.src.readIdx + 1) - int64(op.UnplayedBufferSize())
-	d := float64(playedSize) / (float64(op.sampleRate) * 4)
+	d := float64(playedSize) / float64(store.ByteRate)
 	return time.ParseDuration(fmt.Sprintf("%vs", d))
 }
 func (op *otoPlayer) Wait(d time.Duration) {
@@ -158,8 +159,9 @@ func (ap *audioPlayer) init() error {
 	return nil
 }
 func (ap *audioPlayer) Close() error {
-	ap.player.Pause()
-	ap.timeBar.Pause()
+	if ap.IsPlaying() && !ap.IsPausing() {
+		ap.Pause()
+	}
 
 	ap.cancel()
 	err1 := ap.player.Close()
@@ -169,6 +171,21 @@ func (ap *audioPlayer) Close() error {
 	} else {
 		return err2
 	}
+}
+
+func (ap *audioPlayer) IsPlaying() bool {
+	return ap.player.IsPlaying() && ap.timeBar.IsPlaying()
+}
+func (ap *audioPlayer) IsPausing() bool {
+	return ap.player.IsPausing() && ap.timeBar.IsPausing()
+}
+func (ap *audioPlayer) Play() {
+	ap.timeBar.Play()
+	ap.player.Play()
+}
+func (ap *audioPlayer) Pause() {
+	ap.timeBar.Pause()
+	ap.player.Pause()
 }
 
 func (ap *audioPlayer) SyncTime() {
@@ -181,9 +198,7 @@ func (ap *audioPlayer) SyncTime() {
 			case <-ap.ctx.Done():
 				return
 			case <-ticker.C:
-				aPlaying := ap.player.IsPlaying()
-				tPlaying := ap.timeBar.IsPlaying()
-				if !aPlaying || !tPlaying {
+				if !ap.IsPlaying() && ap.IsPausing() {
 					continue
 				}
 
@@ -202,29 +217,31 @@ func (ap *audioPlayer) SyncTime() {
 }
 
 func (ap *audioPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
+	var btns fyne.CanvasObject
+	var obj fyne.CanvasObject
+
 	var playBtn *widget.Button
 	playBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
 		if ap.player.IsPlaying() {
-			ap.player.Pause()
-			ap.timeBar.Pause()
+			ap.Pause()
 			playBtn.SetIcon(theme.MediaPlayIcon())
 		} else {
-			ap.player.Play()
-			ap.timeBar.Play()
+			ap.Play()
 			playBtn.SetIcon(theme.MediaPauseIcon())
 		}
 	})
 
 	resetBtn := widget.NewButtonWithIcon("", theme.MediaSkipPreviousIcon(), func() {
-		ap.player.Pause()
-		ap.timeBar.Pause()
-
 		ap.Close()
 		ap.init()
+		obj.(*fyne.Container).Objects[0] = ap.timeBar.Render()
+		obj.Refresh()
+		ap.SyncTime()
 		playBtn.SetIcon(theme.MediaPlayIcon())
 	})
 
 	ap.SyncTime()
-	btns := container.NewHBox(playBtn, resetBtn)
-	return ap.timeBar.Render(btns), ap.Close
+	btns = container.NewHBox(playBtn, resetBtn)
+	obj = container.NewBorder(nil, nil, btns, nil, ap.timeBar.Render())
+	return obj, ap.Close
 }

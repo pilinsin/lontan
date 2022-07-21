@@ -45,7 +45,7 @@ type IPlayer interface {
 }
 type ITimeBar interface {
 	IPlayer
-	Render(fyne.CanvasObject) fyne.CanvasObject
+	Render() fyne.CanvasObject
 }
 
 type timeBar struct {
@@ -88,8 +88,6 @@ func NewTimeBar(total float64) *timeBar {
 	return tb
 }
 func (tb *timeBar) Close() error {
-	<-tb.pauseCh
-
 	tb.cancel()
 	close(tb.pauseCh)
 	close(tb.unPauseCh)
@@ -184,6 +182,6 @@ func (tb *timeBar) Seek(offset int64, whence int) (int64, error) {
 	*/
 }
 
-func (tb *timeBar) Render(btns fyne.CanvasObject) fyne.CanvasObject {
-	return container.NewBorder(nil, nil, btns, tb.timeLabel, tb.slider)
+func (tb *timeBar) Render() fyne.CanvasObject {
+	return container.NewBorder(nil, nil, nil, tb.timeLabel, tb.slider)
 }

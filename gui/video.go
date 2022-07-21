@@ -197,12 +197,11 @@ func (v *video) init(fps float64) {
 	}()
 }
 func (v *video) Close() error {
-	<-v.pauseCh
-
 	v.cancel()
 	v.src.Close()
 	close(v.pauseCh)
 	close(v.unPauseCh)
+	v.screen = nil
 	return nil
 }
 
@@ -278,7 +277,7 @@ func (v *video) Seek(offset int64, whence int) (int64, error) {
 
 	n, err := v.src.Seek(offset, whence)
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
 
 	return n, nil
@@ -291,9 +290,10 @@ type videoPlayer struct {
 	is  ipfs.Ipfs
 	cid string
 
-	audio   iAudioPlayer
-	video   iVideoPlayer
-	timeBar gutil.ITimeBar
+	audio     iAudioPlayer
+	video     iVideoPlayer
+	timeBar   gutil.ITimeBar
+	isSyncing bool
 
 	screen *canvas.Image
 }
@@ -350,20 +350,22 @@ func (vp *videoPlayer) init() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	vp.ctx = ctx
 	vp.cancel = cancel
+	vp.isSyncing = false
 
 	return nil
 }
 func (vp *videoPlayer) Close() error {
-	vp.audio.Pause()
-	vp.video.Pause()
-	vp.timeBar.Pause()
+	if vp.IsPlaying() && !vp.IsPausing() {
+		vp.Pause()
+	}
 
 	vp.cancel()
-	time.Sleep(time.Second)
-
+	err3 := vp.timeBar.Close()
 	err1 := vp.video.Close()
 	err2 := vp.audio.Close()
-	err3 := vp.timeBar.Close()
+
+	vp.screen = nil
+
 	if err1 != nil {
 		return err1
 	} else if err2 != nil {
@@ -371,6 +373,23 @@ func (vp *videoPlayer) Close() error {
 	} else {
 		return err3
 	}
+}
+
+func (vp *videoPlayer) IsPlaying() bool {
+	return vp.video.IsPlaying() && vp.audio.IsPlaying() && vp.timeBar.IsPlaying()
+}
+func (vp *videoPlayer) IsPausing() bool {
+	return vp.video.IsPausing() && vp.audio.IsPausing() && vp.timeBar.IsPausing()
+}
+func (vp *videoPlayer) Play() {
+	vp.timeBar.Play()
+	vp.video.Play()
+	vp.audio.Play()
+}
+func (vp *videoPlayer) Pause() {
+	vp.timeBar.Pause()
+	vp.video.Pause()
+	vp.audio.Pause()
 }
 
 func (vp *videoPlayer) SyncTime() {
@@ -383,18 +402,10 @@ func (vp *videoPlayer) SyncTime() {
 			case <-vp.ctx.Done():
 				return
 			case <-ticker.C:
-				aPlaying := vp.audio.IsPlaying()
-				vPlaying := vp.video.IsPlaying()
-				tPlaying := vp.timeBar.IsPlaying()
-				if !aPlaying || !vPlaying || !tPlaying {
+				if !vp.IsPlaying() && vp.IsPausing() {
 					continue
 				}
-				aPausing := vp.audio.IsPausing()
-				vPausing := vp.video.IsPausing()
-				tPausing := vp.timeBar.IsPausing()
-				if aPausing || vPausing || tPausing {
-					continue
-				}
+				vp.isSyncing = true
 
 				aTime, err1 := vp.audio.PlayedTime()
 				vTime, err2 := vp.video.PlayedTime()
@@ -411,42 +422,51 @@ func (vp *videoPlayer) SyncTime() {
 				fmt.Println("audio", aTime)
 				fmt.Println("video", vTime)
 				fmt.Println("tbar", tTime)
+
+				vp.isSyncing = false
 			}
 		}
 
 	}()
 }
 func (vp *videoPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
+	var btns fyne.CanvasObject
+	var screen fyne.CanvasObject
+	var timeBar fyne.CanvasObject
+	var obj fyne.CanvasObject
+
 	var playBtn *widget.Button
 	playBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
-		if vp.audio.IsPlaying() {
-			vp.audio.Pause()
-			vp.video.Pause()
-			vp.timeBar.Pause()
+		if vp.IsPlaying() || !vp.IsPausing() && !vp.isSyncing {
+			vp.Pause()
 			playBtn.SetIcon(theme.MediaPlayIcon())
 		} else {
-			vp.audio.Play()
-			vp.video.Play()
-			vp.timeBar.Play()
+			vp.Play()
 			playBtn.SetIcon(theme.MediaPauseIcon())
 		}
 	})
 
 	resetBtn := widget.NewButtonWithIcon("", theme.MediaSkipPreviousIcon(), func() {
-		vp.audio.Pause()
-		vp.video.Pause()
-		vp.timeBar.Pause()
-
+		if vp.isSyncing {
+			return
+		}
 		vp.Close()
 		vp.init()
+
+		screen.(*fyne.Container).Objects[0] = vp.screen
+		screen.Refresh()
+		timeBar.(*fyne.Container).Objects[0] = vp.timeBar.Render()
+		timeBar.Refresh()
+		obj.Refresh()
+
 		vp.SyncTime()
 		playBtn.SetIcon(theme.MediaPlayIcon())
 	})
 
 	vp.SyncTime()
-	screen := container.NewGridWrap(fyne.NewSize(800, 450), vp.screen)
-
-	btns := container.NewHBox(playBtn, resetBtn)
-	obj := container.NewBorder(screen, vp.timeBar.Render(btns), nil, nil)
+	screen = container.NewGridWrap(fyne.NewSize(800, 450), vp.screen)
+	btns = container.NewHBox(playBtn, resetBtn)
+	timeBar = container.NewBorder(nil, nil, btns, nil, vp.timeBar.Render())
+	obj = container.NewBorder(screen, timeBar, nil, nil)
 	return obj, vp.Close
 }
