@@ -82,14 +82,29 @@ func newOtoPlayer(dec *audioDecoder) (*otoPlayer, error) {
 		src:    dec,
 	}, nil
 }
-func (op *otoPlayer) IsPausing() bool {
-	return !op.IsPlaying()
+func (op *otoPlayer) Close() error {
+	if op.IsPlaying() && !op.IsPausing() {
+		op.Pause()
+	}
+
+	return op.Player.Close()
 }
-func (op *otoPlayer) PlayedTime() (time.Duration, error) {
-	playedSize := (op.src.readIdx + 1) - int64(op.UnplayedBufferSize())
-	d := float64(playedSize) / float64(store.ByteRate)
-	return time.ParseDuration(fmt.Sprintf("%vs", d))
+func (op *otoPlayer) Reset() {
+	if op.IsPlaying() && !op.IsPausing() {
+		op.Pause()
+	}
+
+	if _, err := op.Seek(0, io.SeekStart); err == nil {
+		return
+	}
+
+	op.Close()
+	op.src.Seek(0, io.SeekStart)
+	player := otoCtx.NewPlayer(op.src)
+	player.(oto.BufferSizeSetter).SetBufferSize(store.ByteRate * 5)
+	op.Player = player
 }
+
 func (op *otoPlayer) Wait(d time.Duration) {
 	if d == 0 {
 		return
@@ -99,6 +114,16 @@ func (op *otoPlayer) Wait(d time.Duration) {
 	time.Sleep(d)
 	op.Play()
 }
+
+func (op *otoPlayer) IsPausing() bool {
+	return !op.IsPlaying()
+}
+func (op *otoPlayer) PlayedTime() (time.Duration, error) {
+	playedSize := (op.src.readIdx + 1) - int64(op.UnplayedBufferSize())
+	d := float64(playedSize) / float64(store.ByteRate)
+	return time.ParseDuration(fmt.Sprintf("%vs", d))
+}
+
 func (op *otoPlayer) Seek(offset int64, whence int) (int64, error) {
 	seeker, ok := op.Player.(io.Seeker)
 	if !ok {
@@ -115,8 +140,9 @@ type audioPlayer struct {
 	cid string
 	is  ipfs.Ipfs
 
-	player  iAudioPlayer
-	timeBar gutil.ITimeBar
+	player    iAudioPlayer
+	timeBar   gutil.ITimeBar
+	isSyncing bool
 }
 
 func NewAudioPlayer(cid string, is ipfs.Ipfs) (*audioPlayer, error) {
@@ -144,17 +170,18 @@ func (ap *audioPlayer) init() error {
 	if err != nil {
 		return err
 	}
-	player, err := newOtoPlayer(dec)
+	ap.player, err = newOtoPlayer(dec)
 	if err != nil {
 		return err
 	}
-	ap.player = player
 
-	ap.timeBar = gutil.NewTimeBar(pbAudio.GetSecond())
+	ap.timeBar = gutil.NewTimeBar(pbAudio.GetSecond(), nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ap.ctx = ctx
 	ap.cancel = cancel
+
+	ap.isSyncing = false
 
 	return nil
 }
@@ -164,6 +191,7 @@ func (ap *audioPlayer) Close() error {
 	}
 
 	ap.cancel()
+
 	err1 := ap.player.Close()
 	err2 := ap.timeBar.Close()
 	if err1 != nil {
@@ -171,6 +199,14 @@ func (ap *audioPlayer) Close() error {
 	} else {
 		return err2
 	}
+}
+func (ap *audioPlayer) Reset() {
+	if ap.IsPlaying() && !ap.IsPausing() {
+		ap.Pause()
+	}
+
+	ap.player.Reset()
+	ap.timeBar.Reset()
 }
 
 func (ap *audioPlayer) IsPlaying() bool {
@@ -198,9 +234,10 @@ func (ap *audioPlayer) SyncTime() {
 			case <-ap.ctx.Done():
 				return
 			case <-ticker.C:
-				if !ap.IsPlaying() && ap.IsPausing() {
+				if !ap.IsPlaying() || ap.IsPausing() {
 					continue
 				}
+				ap.isSyncing = true
 
 				aTime, err1 := ap.player.PlayedTime()
 				tTime, err2 := ap.timeBar.PlayedTime()
@@ -210,6 +247,8 @@ func (ap *audioPlayer) SyncTime() {
 				min := gutil.MinTime(aTime, tTime)
 				ap.player.Wait(aTime - min)
 				ap.timeBar.Wait(tTime - min)
+
+				ap.isSyncing = false
 			}
 		}
 
@@ -222,7 +261,10 @@ func (ap *audioPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
 
 	var playBtn *widget.Button
 	playBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
-		if ap.player.IsPlaying() {
+		if ap.isSyncing {
+			return
+		}
+		if ap.player.IsPlaying() && !ap.IsPausing() {
 			ap.Pause()
 			playBtn.SetIcon(theme.MediaPlayIcon())
 		} else {
@@ -232,11 +274,12 @@ func (ap *audioPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
 	})
 
 	resetBtn := widget.NewButtonWithIcon("", theme.MediaSkipPreviousIcon(), func() {
-		ap.Close()
-		ap.init()
+		if ap.isSyncing {
+			return
+		}
+		ap.Reset()
 		obj.(*fyne.Container).Objects[0] = ap.timeBar.Render()
 		obj.Refresh()
-		ap.SyncTime()
 		playBtn.SetIcon(theme.MediaPlayIcon())
 	})
 

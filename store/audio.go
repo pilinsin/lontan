@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -25,15 +24,14 @@ const (
 
 func encodeAudio(r fyne.URIReadCloser) (string, error) {
 	fileName := strings.TrimSuffix(r.URI().Name(), r.URI().Extension())
-	f, err := os.CreateTemp("", fileName+"_tmp_convert*.mp3")
+	f, err := os.CreateTemp(exeDir(), fileName+"_tmp_convert*.mp3")
 	if err != nil {
 		return "", err
 	}
 	f.Close()
-	outName := BaseDir(filepath.Base(f.Name()))
 
 	strm := ffmpeg.Input(r.URI().Path()).Audio().
-		Output(outName, ffmpeg.KwArgs{
+		Output(f.Name(), ffmpeg.KwArgs{
 			"c:a": "mp3",
 			"ac":  NumChannel,
 			"ar":  SampleRate,
@@ -42,7 +40,7 @@ func encodeAudio(r fyne.URIReadCloser) (string, error) {
 		return "", err
 	}
 
-	return outName, nil
+	return f.Name(), nil
 }
 func EncodeAudio(r fyne.URIReadCloser) (io.Reader, error) {
 	encodedName, err := encodeAudio(r)

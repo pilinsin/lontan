@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -34,22 +33,21 @@ func getVideoFpsAndLength(r fyne.URIReadCloser) (float64, int64, float64, error)
 
 func encodeVideo(r fyne.URIReadCloser) (string, error) {
 	fileName := strings.TrimSuffix(r.URI().Name(), r.URI().Extension())
-	f, err := os.CreateTemp("", fileName+"_tmp_convert*"+r.URI().Extension())
+	f, err := os.CreateTemp(exeDir(), fileName+"_tmp_convert*"+r.URI().Extension())
 	if err != nil {
 		return "", err
 	}
 	f.Close()
-	outName := BaseDir(filepath.Base(f.Name()))
 
 	strm := ffmpeg.Input(r.URI().Path()).Video().
-		Output(outName, ffmpeg.KwArgs{
+		Output(f.Name(), ffmpeg.KwArgs{
 			"vf": fmt.Sprintf("scale=%dx%d:flags=lanczos", VideoW, VideoH),
 		})
 	if err := strm.OverWriteOutput().Run(); err != nil {
 		return "", err
 	}
 
-	return outName, nil
+	return f.Name(), nil
 }
 
 func EncodeVideo(r fyne.URIReadCloser) (io.Reader, error) {

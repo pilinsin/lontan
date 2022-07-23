@@ -40,6 +40,7 @@ type IPlayer interface {
 	IsPlaying() bool
 	IsPausing() bool
 	PlayedTime() (time.Duration, error)
+	Reset()
 	io.Seeker
 	io.Closer
 }
@@ -62,7 +63,8 @@ type timeBar struct {
 	unPauseCh chan bool
 }
 
-func NewTimeBar(total float64) *timeBar {
+//offsetRate: [0, 1]
+func NewTimeBar(total float64, seek func(offsetRate float64)) *timeBar {
 	ctx, cancel := context.WithCancel(context.Background())
 	slider := widget.NewSlider(0, total)
 	totalTime := durationToDisplay(int(total))
@@ -78,20 +80,37 @@ func NewTimeBar(total float64) *timeBar {
 		unPauseCh: make(chan bool, 1),
 	}
 	tb.slider.OnChanged = func(v float64) {
-		//@@@@@@@@@
-		offset := int64(v / total)
-		if _, err := tb.Seek(offset, io.SeekStart); err != nil {
+		offsetRate := v / total
+		if seek == nil {
 			return
 		}
+		seek(offsetRate)
+		tb.Seek(int64(v), io.SeekStart)
 	}
 
 	return tb
 }
 func (tb *timeBar) Close() error {
+	if tb.isPlaying && !tb.isPausing {
+		tb.Pause()
+	}
 	tb.cancel()
+	tb.unPauseCh <- true
+	time.Sleep(time.Millisecond * 10)
+
 	close(tb.pauseCh)
 	close(tb.unPauseCh)
 	return nil
+}
+func (tb *timeBar) Reset() {
+	//if tb.Seek is implemented, tb.Pause() & tb.Seek(0, io.SeekStart)
+	if tb.isPlaying && !tb.isPausing {
+		tb.Pause()
+	}
+
+	tb.last = 0
+	tb.slider.Value = 0
+	tb.timeLabel.SetText("00:00/" + tb.totalStr)
 }
 
 func (tb *timeBar) Play() {
@@ -114,11 +133,15 @@ func (tb *timeBar) Play() {
 				tb.isPlaying = false
 				tb.isPausing = false
 				return
-			case <-ticker.C:
+			default:
 				if tb.isPausing {
 					tb.pauseCh <- true
 					<-tb.unPauseCh
 				}
+
+				tb.slider.Refresh()
+				nowTime := durationToDisplay(int(tb.slider.Value))
+				tb.timeLabel.SetText(nowTime + "/" + tb.totalStr)
 
 				if tb.slider.Value >= tb.slider.Max {
 					tb.isPlaying = false
@@ -128,29 +151,17 @@ func (tb *timeBar) Play() {
 
 				tb.last = tb.slider.Value
 				tb.slider.Value += 1
-				tb.slider.Refresh()
-
-				nowTime := durationToDisplay(int(tb.slider.Value))
-				tb.timeLabel.SetText(nowTime + "/" + tb.totalStr)
+				<-ticker.C
 			}
 		}
 	}()
 }
 func (tb *timeBar) Pause() {
-	if !tb.isPlaying {
+	if !tb.isPlaying || tb.isPausing {
 		return
 	}
 	tb.isPausing = true
 	<-tb.pauseCh
-}
-func (tb *timeBar) IsPlaying() bool {
-	return tb.isPlaying
-}
-func (tb *timeBar) IsPausing() bool {
-	return tb.isPausing
-}
-func (tb *timeBar) PlayedTime() (time.Duration, error) {
-	return time.ParseDuration(fmt.Sprintf("%vs", tb.slider.Value))
 }
 func (tb *timeBar) Wait(d time.Duration) {
 	if d == 0 {
@@ -161,24 +172,32 @@ func (tb *timeBar) Wait(d time.Duration) {
 	time.Sleep(d)
 	tb.Play()
 }
-func (tb *timeBar) Seek(offset int64, whence int) (int64, error) {
+
+func (tb *timeBar) IsPlaying() bool {
+	return tb.isPlaying
+}
+func (tb *timeBar) IsPausing() bool {
+	return tb.isPausing
+}
+func (tb *timeBar) PlayedTime() (time.Duration, error) {
+	return time.ParseDuration(fmt.Sprintf("%vs", tb.slider.Value))
+}
+
+func (tb *timeBar) Seek(offset int64, _ int) (int64, error) {
 	tb.slider.Value = tb.last
 	tb.slider.Refresh()
-	return -1, nil
+	return offset, nil
 	/*
-		idx := int(v) / store.SplitSec
-		slider.Value = float64(idx * store.SplitSec)
-		vp.Video.Pause()
-		vp.audio.Pause()
+		if tb.isPlaying && !tb.isPausing{
+			tb.Pause()
+		}
 
-		vp.video.Seek(int64(idx), io.SeekStart)
-		vp.audio.Seek(int64(idx), io.SeekStart)
-
-		vp.video.Play()
-		vp.audio.Play()
-
+		ofst := float64(offset)
+		tb.last = ofst
+		tb.slider.Value = ofst
 		nowTime := durationToDisplay(int(slider.Value))
 		timeLabel.SetText(nowTime + "/" + totalTime)
+		return offset, nil
 	*/
 }
 

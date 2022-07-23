@@ -22,6 +22,19 @@ import (
 	proto "google.golang.org/protobuf/proto"
 )
 
+func videoDataToFile(vData []byte) (string, error) {
+	f, err := os.CreateTemp("", ".*_tmp")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.Write(vData); err != nil {
+		return "", err
+	}
+
+	return f.Name(), nil
+}
+
 type videoDecoder struct {
 	srcName    string
 	frameCount int64
@@ -30,18 +43,9 @@ type videoDecoder struct {
 	vc *gocv.VideoCapture
 }
 
-func newVideoDecoder(vData []byte, frameCount int64) (*videoDecoder, error) {
-	f, err := os.CreateTemp("", ".*_tmp")
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	if _, err := f.Write(vData); err != nil {
-		return nil, err
-	}
-
+func newVideoDecoder(vTmpName string, frameCount int64) (*videoDecoder, error) {
 	dec := &videoDecoder{
-		srcName:    f.Name(),
+		srcName:    vTmpName,
 		frameCount: frameCount,
 	}
 
@@ -66,7 +70,6 @@ func (dec *videoDecoder) init() error {
 }
 func (dec *videoDecoder) Close() {
 	dec.vc.Close()
-	os.Remove(dec.srcName)
 }
 
 func (dec *videoDecoder) Read(buf []image.Image) (int, error) {
@@ -110,10 +113,6 @@ func (dec *videoDecoder) seek(n int64) error {
 	return nil
 }
 func (dec *videoDecoder) Seek(offset int64, whence int) (int64, error) {
-	if offset == 0 && whence == io.SeekStart {
-		return dec.readIdx, nil
-	}
-
 	switch whence {
 	case io.SeekCurrent:
 		offset += dec.readIdx
@@ -138,6 +137,7 @@ type video struct {
 
 	src       *videoDecoder
 	buf       chan image.Image
+	bufSize   int
 	duration  time.Duration
 	fps       float64
 	isPlaying bool
@@ -155,69 +155,66 @@ func newVideo(vr *videoDecoder, fps float64, screen *canvas.Image) (*video, erro
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
+	bufSize := int(fps+1) * 2
 	v := &video{
 		ctx:       ctx,
 		cancel:    cancel,
 		src:       vr,
-		buf:       make(chan image.Image, int(fps+1)*60),
+		buf:       make(chan image.Image, bufSize),
+		bufSize:   bufSize,
 		duration:  dur,
 		fps:       fps,
 		pauseCh:   make(chan bool, 1),
 		unPauseCh: make(chan bool, 1),
 		screen:    screen,
 	}
-	v.init(fps)
+	v.init()
 
 	return v, nil
 }
-func (v *video) init(fps float64) {
-	go func() {
-		ticker := time.NewTicker(time.Millisecond)
-		defer ticker.Stop()
+func (v *video) init() {
+	tmpBufSize := int((v.fps + 1) * 0.3)
+	if len(v.buf) >= v.bufSize-tmpBufSize {
+		return
+	}
 
-		defer close(v.buf)
-		for {
-			select {
-			case <-v.ctx.Done():
-				return
-			case <-ticker.C:
-				buf := make([]image.Image, int(fps+1)*5)
-				n, err := v.src.Read(buf)
-				if err != nil {
-					return
-				}
+	buf := make([]image.Image, tmpBufSize)
+	n, err := v.src.Read(buf)
+	if err != nil {
+		return
+	}
 
-				if n > 0 {
-					for _, b := range buf {
-						v.buf <- b
-					}
-				}
-			}
-		}
-	}()
+	for _, b := range buf[:n] {
+		v.buf <- b
+	}
 }
+
 func (v *video) Close() error {
+	if v.isPlaying && !v.isPausing {
+		v.Pause()
+	}
 	v.cancel()
+	v.unPauseCh <- true
+	time.Sleep(time.Millisecond * 10)
+
 	v.src.Close()
 	close(v.pauseCh)
 	close(v.unPauseCh)
-	v.screen = nil
+	close(v.buf)
 	return nil
+}
+func (v *video) Reset() {
+	if v.isPlaying && !v.isPausing {
+		v.Pause()
+	}
+
+	v.Seek(0, io.SeekStart)
 }
 
 func (v *video) PlayedTime() (time.Duration, error) {
 	playedSize := (v.src.readIdx + 1) - int64(len(v.buf))
 	d := float64(playedSize) / v.fps
 	return time.ParseDuration(fmt.Sprintf("%vs", d))
-}
-func (v *video) Wait(d time.Duration) {
-	if d == 0 {
-		return
-	}
-
-	v.Pause()
-	time.Sleep(d)
-	v.Play()
 }
 
 func (v *video) Play() {
@@ -246,6 +243,7 @@ func (v *video) Play() {
 					<-v.unPauseCh
 				}
 
+				v.init()
 				res, ok := <-v.buf
 				if !ok {
 					v.isPlaying = false
@@ -260,12 +258,22 @@ func (v *video) Play() {
 	}()
 }
 func (v *video) Pause() {
-	if !v.isPlaying {
+	if !v.isPlaying || v.isPausing {
 		return
 	}
 	v.isPausing = true
 	<-v.pauseCh
 }
+func (v *video) Wait(d time.Duration) {
+	if d == 0 {
+		return
+	}
+
+	v.Pause()
+	time.Sleep(d)
+	v.Play()
+}
+
 func (v *video) IsPlaying() bool {
 	return v.isPlaying
 }
@@ -280,6 +288,10 @@ func (v *video) Seek(offset int64, whence int) (int64, error) {
 		return 0, err
 	}
 
+	close(v.buf)
+	v.buf = make(chan image.Image, v.bufSize)
+	v.init()
+
 	return n, nil
 }
 
@@ -287,21 +299,41 @@ type videoPlayer struct {
 	ctx    context.Context
 	cancel func()
 
-	is  ipfs.Ipfs
-	cid string
+	aData      []byte
+	vFileName  string
+	frameRate  float64
+	frameCount int64
+	second     float64
 
-	audio     iAudioPlayer
-	video     iVideoPlayer
-	timeBar   gutil.ITimeBar
+	audio   iAudioPlayer
+	video   iVideoPlayer
+	timeBar gutil.ITimeBar
+
 	isSyncing bool
 
 	screen *canvas.Image
 }
 
 func NewVideoPlayer(cid string, is ipfs.Ipfs) (*videoPlayer, error) {
+	m, err := is.Get(cid)
+	if err != nil {
+		return nil, err
+	}
+	pbVideo := &pb.Video{}
+	if err := proto.Unmarshal(m, pbVideo); err != nil {
+		return nil, err
+	}
+
+	vData, err := videoDataToFile(pbVideo.GetVideo())
+	if err != nil {
+		return nil, err
+	}
 	vp := &videoPlayer{
-		cid: cid,
-		is:  is,
+		aData:      pbVideo.GetAudio(),
+		vFileName:  vData,
+		frameRate:  pbVideo.GetFrameRate(),
+		frameCount: pbVideo.GetFrameCount(),
+		second:     pbVideo.GetSecond(),
 	}
 	if err := vp.init(); err != nil {
 		return nil, err
@@ -316,40 +348,30 @@ func (vp *videoPlayer) init() error {
 	vp.screen.FillMode = canvas.ImageFillContain
 	vp.screen.Refresh()
 
-	m, err := vp.is.Get(vp.cid)
+	aDec, err := newAudioDecoder(vp.aData)
 	if err != nil {
 		return err
 	}
-	pbVideo := &pb.Video{}
-	if err := proto.Unmarshal(m, pbVideo); err != nil {
+	vp.audio, err = newOtoPlayer(aDec)
+	if err != nil {
 		return err
 	}
 
-	aDec, err := newAudioDecoder(pbVideo.GetAudio())
+	vDec, err := newVideoDecoder(vp.vFileName, vp.frameCount)
 	if err != nil {
 		return err
 	}
-	audio, err := newOtoPlayer(aDec)
+	vp.video, err = newVideo(vDec, vp.frameRate, vp.screen)
 	if err != nil {
 		return err
 	}
-	vp.audio = audio
 
-	vDec, err := newVideoDecoder(pbVideo.GetVideo(), pbVideo.GetFrameCount())
-	if err != nil {
-		return err
-	}
-	video, err := newVideo(vDec, pbVideo.GetFrameRate(), vp.screen)
-	if err != nil {
-		return err
-	}
-	vp.video = video
-
-	vp.timeBar = gutil.NewTimeBar(pbVideo.GetSecond())
+	vp.timeBar = gutil.NewTimeBar(vp.second, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	vp.ctx = ctx
 	vp.cancel = cancel
+
 	vp.isSyncing = false
 
 	return nil
@@ -360,11 +382,12 @@ func (vp *videoPlayer) Close() error {
 	}
 
 	vp.cancel()
-	err3 := vp.timeBar.Close()
-	err1 := vp.video.Close()
-	err2 := vp.audio.Close()
 
-	vp.screen = nil
+	err1 := vp.audio.Close()
+	err2 := vp.timeBar.Close()
+	err3 := vp.video.Close()
+
+	os.Remove(vp.vFileName)
 
 	if err1 != nil {
 		return err1
@@ -374,13 +397,19 @@ func (vp *videoPlayer) Close() error {
 		return err3
 	}
 }
+func (vp *videoPlayer) Reset() {
+	if vp.IsPlaying() && !vp.IsPausing() {
+		vp.Pause()
+	}
 
-func (vp *videoPlayer) IsPlaying() bool {
-	return vp.video.IsPlaying() && vp.audio.IsPlaying() && vp.timeBar.IsPlaying()
+	vp.timeBar.Reset()
+	vp.video.Reset()
+	vp.audio.Reset()
+
+	vp.screen.Image = image.NewGray(image.Rect(0, 0, store.VideoW, store.VideoH))
+	vp.screen.Refresh()
 }
-func (vp *videoPlayer) IsPausing() bool {
-	return vp.video.IsPausing() && vp.audio.IsPausing() && vp.timeBar.IsPausing()
-}
+
 func (vp *videoPlayer) Play() {
 	vp.timeBar.Play()
 	vp.video.Play()
@@ -390,6 +419,13 @@ func (vp *videoPlayer) Pause() {
 	vp.timeBar.Pause()
 	vp.video.Pause()
 	vp.audio.Pause()
+}
+
+func (vp *videoPlayer) IsPlaying() bool {
+	return vp.video.IsPlaying() && vp.audio.IsPlaying() && vp.timeBar.IsPlaying()
+}
+func (vp *videoPlayer) IsPausing() bool {
+	return vp.video.IsPausing() && vp.audio.IsPausing() && vp.timeBar.IsPausing()
 }
 
 func (vp *videoPlayer) SyncTime() {
@@ -402,7 +438,7 @@ func (vp *videoPlayer) SyncTime() {
 			case <-vp.ctx.Done():
 				return
 			case <-ticker.C:
-				if !vp.IsPlaying() && vp.IsPausing() {
+				if !vp.IsPlaying() || vp.IsPausing() {
 					continue
 				}
 				vp.isSyncing = true
@@ -418,11 +454,6 @@ func (vp *videoPlayer) SyncTime() {
 				vp.video.Wait(vTime - min)
 				vp.timeBar.Wait(tTime - min)
 
-				fmt.Println("min", min)
-				fmt.Println("audio", aTime)
-				fmt.Println("video", vTime)
-				fmt.Println("tbar", tTime)
-
 				vp.isSyncing = false
 			}
 		}
@@ -437,7 +468,10 @@ func (vp *videoPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
 
 	var playBtn *widget.Button
 	playBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
-		if vp.IsPlaying() || !vp.IsPausing() && !vp.isSyncing {
+		if vp.isSyncing {
+			return
+		}
+		if vp.IsPlaying() && !vp.IsPausing() {
 			vp.Pause()
 			playBtn.SetIcon(theme.MediaPlayIcon())
 		} else {
@@ -450,16 +484,13 @@ func (vp *videoPlayer) Render() (fyne.CanvasObject, gutil.Closer) {
 		if vp.isSyncing {
 			return
 		}
-		vp.Close()
-		vp.init()
+		vp.Reset()
 
 		screen.(*fyne.Container).Objects[0] = vp.screen
 		screen.Refresh()
 		timeBar.(*fyne.Container).Objects[0] = vp.timeBar.Render()
 		timeBar.Refresh()
 		obj.Refresh()
-
-		vp.SyncTime()
 		playBtn.SetIcon(theme.MediaPlayIcon())
 	})
 
